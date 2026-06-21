@@ -6,8 +6,10 @@
 		cardImage,
 		cardLabel,
 		cardCode,
+		cardsFromCodes,
 		themeLabel,
 		handOptions,
+		handIndexByName,
 		playedFrames,
 		handName,
 		handMult,
@@ -48,7 +50,14 @@
 		return (h % 17) - 8;
 	}
 
-	let hand = $state<HandCard[]>([]);
+	// When editing, seed the hand from the cards already on file (each gets a uid).
+	// svelte-ignore state_referenced_locally -- intentional one-time prefill from server
+	let hand = $state<HandCard[]>(
+		cardsFromCodes((data.initialCards ?? '').split(/\s+/).filter(Boolean)).map((c) => ({
+			...c,
+			uid: uidSeq++
+		}))
+	);
 	let query = $state('');
 	let open = $state(false);
 	let root: HTMLDivElement | undefined = $state();
@@ -85,7 +94,11 @@
 
 	// The hand the player has chosen to play. Null = follow the best automatically;
 	// once they pick, we honour it until it's no longer formable (cards changed).
-	let picked = $state<number | null>(null);
+	// When editing, start from the hand that was previously played.
+	// svelte-ignore state_referenced_locally -- intentional one-time prefill from server
+	let picked = $state<number | null>(
+		data.initialHand ? (handIndexByName(data.initialHand) >= 0 ? handIndexByName(data.initialHand) : null) : null
+	);
 	const activeHand = $derived(picked !== null && options.includes(picked) ? picked : bestIdx);
 
 	// Reset a stale manual pick when the formable hands change underneath it.
@@ -382,7 +395,7 @@
 
 			<div class="button-spacing">
 				<button class="submit" type="submit" disabled={hand.length === 0 || submitting}>
-					{submitting ? 'Submitting…' : 'Next'}
+					{submitting ? 'Saving…' : data.editing ? 'Save changes' : 'Next'}
 				</button>
 			</div>
 		</form>

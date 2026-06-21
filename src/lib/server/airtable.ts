@@ -120,6 +120,50 @@ export async function findTeamSubmissionByMember(
 	}
 }
 
+export interface TeamSubmissionRecord {
+	recordId: string;
+	email: string;
+	/** raw "Optional - Override Hours Spent" value, empty when unset */
+	hours: string;
+	/** "Hackatime Project Name", empty when unset */
+	hackatime: string;
+}
+
+/**
+ * Every submission record sharing a Team ID — the submitter's canonical record
+ * plus a stub per teammate. Used by the edit flow to rebuild the per-member
+ * record list (and prefill each person's hours/Hackatime) without trusting the
+ * browser for record ids. Returns [] when unconfigured or on error.
+ */
+export async function listTeamSubmissions(teamId: string): Promise<TeamSubmissionRecord[]> {
+	if (!isAirtableConfigured()) return [];
+	const id = teamId.trim();
+	if (!id) return [];
+	const { token, baseId, tableId } = config();
+	const formula = encodeURIComponent(`{Team ID}='${escapeFormula(id)}'`);
+	const fields = ['Email', 'Optional - Override Hours Spent', 'Hackatime Project Name']
+		.map((f) => `fields%5B%5D=${encodeURIComponent(f)}`)
+		.join('&');
+	try {
+		const res = await fetch(
+			`${API_BASE}/${baseId}/${tableId}?pageSize=100&filterByFormula=${formula}&${fields}`,
+			{ headers: { Authorization: `Bearer ${token}` } }
+		);
+		if (!res.ok) return [];
+		const data = (await res.json()) as {
+			records?: Array<{ id: string; fields: Record<string, unknown> }>;
+		};
+		return (data.records ?? []).map((r) => ({
+			recordId: r.id,
+			email: String(r.fields['Email'] ?? '').trim(),
+			hours: String(r.fields['Optional - Override Hours Spent'] ?? '').trim(),
+			hackatime: String(r.fields['Hackatime Project Name'] ?? '').trim()
+		}));
+	} catch {
+		return [];
+	}
+}
+
 /** Next sequential team id (max existing + 1) — used for the short vote URL /<id>. */
 export async function nextTeamId(): Promise<string> {
 	const { token, baseId } = config();
@@ -381,6 +425,26 @@ export async function createTeam(opts: {
 	return (await res.json()) as { id: string };
 }
 
+/** Patch a Teams row — used to keep its Team ID / Members in sync after an edit. */
+export async function updateTeam(
+	teamRecordId: string,
+	fields: { teamId?: string; members?: string[] }
+): Promise<void> {
+	const { token, baseId } = config();
+	const patch: Record<string, string> = {};
+	if (fields.teamId !== undefined) patch['Team ID'] = fields.teamId;
+	if (fields.members !== undefined) patch['Members'] = fields.members.join('\n');
+	const res = await fetch(`${API_BASE}/${baseId}/${TEAMS_TABLE_ID}/${teamRecordId}`, {
+		method: 'PATCH',
+		headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+		body: JSON.stringify({ fields: patch, typecast: true })
+	});
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(`Airtable team update failed (${res.status}): ${text}`);
+	}
+}
+
 /** Record a vote (one row per submission), linked to the team being voted on. */
 export async function createVote(opts: {
 	voteId: string;
@@ -462,6 +526,19 @@ export async function updateSubmission(recordId: string, fields: SubmissionField
 	if (!res.ok) {
 		const text = await res.text();
 		throw new Error(`Airtable update failed (${res.status}): ${text}`);
+	}
+}
+
+/** Delete a submission record — used when a teammate is dropped during an edit. */
+export async function deleteSubmission(recordId: string): Promise<void> {
+	const { token, baseId, tableId } = config();
+	const res = await fetch(`${API_BASE}/${baseId}/${tableId}/${recordId}`, {
+		method: 'DELETE',
+		headers: { Authorization: `Bearer ${token}` }
+	});
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(`Airtable delete failed (${res.status}): ${text}`);
 	}
 }
 

@@ -31,7 +31,7 @@ export const CARDS: Card[] = [
 	{ frame: '519', name: 'home', desc: 'no place like it', r: 3, s: 'S' },
 	{ frame: '520', name: 'two', desc: 'the magic number', r: 3, s: 'H' },
 	{ frame: '521', name: 'order', desc: 'everything in its place', r: 3, s: 'D' },
-	{ frame: '522', name: 'greed', desc: 'never enough', r: 4, s: 'C' },
+	{ frame: '522', name: 'greg', desc: 'frog', r: 4, s: 'C' },
 	{ frame: '523', name: 'retro', desc: 'stay groovy', r: 4, s: 'S' },
 	{ frame: '524', name: 'metropolitan', desc: 'the city that never sleeps', r: 4, s: 'H' },
 	{ frame: '525', name: 'banana', desc: 'a-peeling', r: 4, s: 'D' },

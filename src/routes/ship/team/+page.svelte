@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Backdrop from '$lib/components/Backdrop.svelte';
+	import BackLink from '$lib/components/BackLink.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	type Member = { id: string; name: string; slackId?: string; slackUsername?: string };
@@ -114,7 +115,8 @@
 			};
 		}}
 	>
-		<h1>Ship your project</h1>
+		{#if data.editing}<BackLink href="/ship/done" label="Cancel" />{/if}
+		<h1>{data.editing ? 'Edit your project' : 'Ship your project'}</h1>
 
 		<div class="field">
 			<label class="label" for="teamNumber">Team Number</label>

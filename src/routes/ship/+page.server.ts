@@ -5,17 +5,49 @@ import {
 	createTeam,
 	nextTeamId,
 	uploadScreenshot,
-	isAirtableConfigured
+	updateSubmission,
+	getTeamProject,
+	invalidateTeamProject,
+	isAirtableConfigured,
+	type UploadFile
 } from '$lib/server/airtable';
 import { DRAFT_COOKIE, DRAFT_COOKIE_OPTIONS, sealDraft, unsealDraft } from '$lib/server/draft';
 import { guardAlreadyShipped } from '$lib/server/ship-guard';
 
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024; // 5 MB (Airtable inline upload limit)
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
-	await guardAlreadyShipped(locals.user.email);
-	return { user: locals.user };
+	const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
+	if (!draft?.editing) {
+		await guardAlreadyShipped(locals.user.email);
+		// Same `values` shape as the editing branch below so PageData stays a single
+		// consistent type (avoids a Record<string, string> mismatch in +page.svelte).
+		return {
+			user: locals.user,
+			editing: false,
+			values: { projectName: '', playableLink: '', githubRepo: '', description: '' },
+			screenshotUrl: ''
+		};
+	}
+	// Editing: prefill from the canonical project record on file.
+	let project = null;
+	try {
+		project = await getTeamProject(draft.teamId ?? '');
+	} catch {
+		/* fall back to the draft's project name below */
+	}
+	return {
+		user: locals.user,
+		editing: true,
+		values: {
+			projectName: project?.projectName ?? draft.projectName ?? '',
+			playableLink: project?.playableUrl ?? '',
+			githubRepo: project?.codeUrl ?? '',
+			description: project?.description ?? ''
+		},
+		screenshotUrl: project?.screenshotUrl ?? ''
+	};
 };
 
 function parseGithubUsername(repoUrl: string): string {
@@ -34,9 +66,12 @@ const isUrl = (v: string) => /^https?:\/\/.+/i.test(v);
 export const actions: Actions = {
 	default: async ({ request, locals, cookies }) => {
 		if (!locals.user) throw redirect(302, '/');
+		const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
+		const editing = Boolean(draft?.editing);
 		// Integrity guard: never create a second record for someone whose team
-		// has already shipped, even via a stale tab posting straight here.
-		await guardAlreadyShipped(locals.user.email);
+		// has already shipped, even via a stale tab posting straight here. (Editing
+		// is the legitimate way back in, so skip the guard then.)
+		if (!editing) await guardAlreadyShipped(locals.user.email);
 
 		const form = await request.formData();
 		const projectName = String(form.get('projectName') ?? '').trim();
@@ -62,10 +97,14 @@ export const actions: Actions = {
 		// All visible fields are required.
 		if (!projectName) errors.projectName = 'Give your project a name.';
 
-		if (!(screenshot instanceof File) || screenshot.size === 0)
+		// A screenshot is required when shipping; when editing it's optional (the
+		// existing one is kept unless a new file is provided).
+		if (screenshot instanceof File && screenshot.size > 0) {
+			if (screenshot.size > MAX_SCREENSHOT_BYTES)
+				errors.screenshot = 'Screenshot must be under 5 MB.';
+		} else if (!editing) {
 			errors.screenshot = 'Add a screenshot of your project.';
-		else if (screenshot.size > MAX_SCREENSHOT_BYTES)
-			errors.screenshot = 'Screenshot must be under 5 MB.';
+		}
 
 		if (!playableLink) errors.playableLink = 'A playable link is required.';
 		else if (!isUrl(playableLink)) errors.playableLink = 'Enter a full URL (https://…).';
@@ -84,8 +123,78 @@ export const actions: Actions = {
 			});
 		}
 
+		// ---- edit mode: update the existing records in place ----
+		if (editing) {
+			if (!draft?.recordId || !draft.memberRecords?.length) throw redirect(303, '/ship/team');
+
+			const sharedFields: Record<string, string | number> = {
+				'Project Name': projectName,
+				'Code URL': githubRepo,
+				'Playable URL': playableLink,
+				Description: description
+			};
+			const ghUser = parseGithubUsername(githubRepo);
+			if (ghUser) sharedFields['GitHub Username'] = ghUser;
+
+			// Keep the shared project fields in sync on every member's record (the
+			// canonical record is what /ship/done and the vote page read; the stubs
+			// mirror it as in the create flow). The canonical record is first.
+			const updates = await Promise.allSettled(
+				draft.memberRecords.map((m) => updateSubmission(m.recordId, sharedFields))
+			);
+			if (updates[0]?.status === 'rejected') {
+				console.error('updateSubmission (edit project) failed:', updates[0].reason);
+				return fail(502, {
+					values,
+					errors: { form: 'Could not save your changes. Please try again.' }
+				});
+			}
+			for (const r of updates) {
+				if (r.status === 'rejected')
+					console.error('updateSubmission (edit project, stub) failed:', r.reason);
+			}
+
+			// Replace the screenshot only if a new one was supplied — best-effort, on
+			// every member record so each carries it (same as shipping).
+			if (
+				screenshot instanceof File &&
+				screenshot.size > 0 &&
+				screenshot.size <= MAX_SCREENSHOT_BYTES
+			) {
+				const buf = Buffer.from(await screenshot.arrayBuffer());
+				const file: UploadFile = {
+					base64: buf.toString('base64'),
+					contentType: screenshot.type || 'image/png',
+					filename: screenshot.name || 'screenshot.png'
+				};
+				for (const m of draft.memberRecords) {
+					try {
+						await uploadScreenshot(m.recordId, file);
+					} catch (e) {
+						console.error('uploadScreenshot (edit) failed:', e);
+					}
+				}
+			}
+
+			invalidateTeamProject(draft.teamId ?? '');
+
+			cookies.set(
+				DRAFT_COOKIE,
+				sealDraft({
+					editing: true,
+					teamId: draft.teamId,
+					teamRecordId: draft.teamRecordId,
+					recordId: draft.recordId,
+					projectName,
+					teamMembers: draft.teamMembers,
+					memberRecords: draft.memberRecords
+				}),
+				DRAFT_COOKIE_OPTIONS
+			);
+			throw redirect(303, '/ship/hours');
+		}
+
 		// Team details carried over from the Team step (defaults to just the submitter).
-		const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
 		const team = draft?.teamMembers?.length ? draft.teamMembers : [locals.user.email];
 		// Use the team number chosen in the Team step; only auto-assign as a
 		// fallback (e.g. someone posting straight here without that step).
@@ -140,19 +249,30 @@ export const actions: Actions = {
 			});
 		}
 
-		// Best-effort screenshot upload — don't block the flow if it fails.
+		// Prepare the screenshot once so the SAME image can be attached to every
+		// team member's record below. Attachments upload per record (the content
+		// API takes a single record id), so without this each teammate stub would
+		// be left without the screenshot — only the submitter's record would have
+		// it. Reading the bytes once avoids re-buffering the upload per member.
+		let screenshotFile: UploadFile | null = null;
 		if (
 			screenshot instanceof File &&
 			screenshot.size > 0 &&
 			screenshot.size <= MAX_SCREENSHOT_BYTES
 		) {
+			const buf = Buffer.from(await screenshot.arrayBuffer());
+			screenshotFile = {
+				base64: buf.toString('base64'),
+				contentType: screenshot.type || 'image/png',
+				filename: screenshot.name || 'screenshot.png'
+			};
+		}
+
+		// Best-effort screenshot upload to the submitter's record — don't block the
+		// flow if it fails.
+		if (screenshotFile) {
 			try {
-				const buf = Buffer.from(await screenshot.arrayBuffer());
-				await uploadScreenshot(recordId, {
-					base64: buf.toString('base64'),
-					contentType: screenshot.type || 'image/png',
-					filename: screenshot.name || 'screenshot.png'
-				});
+				await uploadScreenshot(recordId, screenshotFile);
 			} catch (e) {
 				// Record is saved; the screenshot can be re-added later. Log the raw
 				// Airtable error (e.g. a 403 from the content/upload API) so a failed
@@ -186,6 +306,15 @@ export const actions: Actions = {
 			try {
 				const { id } = await createSubmission({ ...sharedFields, Email: email });
 				memberRecords.push({ email, recordId: id });
+				// Attach the same screenshot to the teammate's record so every member's
+				// YSWS submission carries it, not just the submitter's (best-effort).
+				if (screenshotFile) {
+					try {
+						await uploadScreenshot(id, screenshotFile);
+					} catch (e) {
+						console.error('uploadScreenshot (teammate stub) failed:', e);
+					}
+				}
 			} catch (e) {
 				console.error('createSubmission (teammate stub) failed:', e);
 			}

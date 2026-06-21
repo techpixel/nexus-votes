@@ -1,6 +1,12 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { updateSubmission, uploadCardsPhoto, isAirtableConfigured } from '$lib/server/airtable';
+import {
+	updateSubmission,
+	uploadCardsPhoto,
+	getTeamProject,
+	invalidateTeamProject,
+	isAirtableConfigured
+} from '$lib/server/airtable';
 import { DRAFT_COOKIE, unsealDraft } from '$lib/server/draft';
 import {
 	cardsFromCodes,
@@ -12,12 +18,34 @@ import {
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB (Airtable inline upload limit)
 
-export const load: PageServerLoad = ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
 	// This step only makes sense once the project record has been created.
 	const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
 	if (!draft?.recordId) throw redirect(302, '/ship');
-	return { user: locals.user, projectName: draft.projectName ?? '' };
+
+	// When editing, prefill the hand from the cards already on file.
+	let initialCards = '';
+	let initialHand = '';
+	if (draft.editing) {
+		try {
+			const project = await getTeamProject(draft.teamId ?? '');
+			if (project) {
+				initialCards = (project.cards ?? []).join(' ');
+				initialHand = project.playedHand ?? '';
+			}
+		} catch {
+			/* fall back to an empty hand */
+		}
+	}
+
+	return {
+		user: locals.user,
+		projectName: draft.projectName ?? '',
+		editing: Boolean(draft.editing),
+		initialCards,
+		initialHand
+	};
 };
 
 export const actions: Actions = {
@@ -74,6 +102,14 @@ export const actions: Actions = {
 		}
 
 		cookies.delete(DRAFT_COOKIE, { path: '/' });
+
+		// When editing, the change is done — refresh the cache and send them back to
+		// the summary so they see the updated project.
+		if (draft.editing) {
+			invalidateTeamProject(draft.teamId ?? '');
+			throw redirect(303, '/ship/done');
+		}
+
 		return { success: true, projectName: draft.projectName ?? 'Your project', photoWarning };
 	}
 };

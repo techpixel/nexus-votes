@@ -70,7 +70,7 @@
 								class:invalid={errors[`hours_${i}`]}
 								placeholder="0"
 								inputmode="decimal"
-								value={hoursValues[i] ?? ''}
+								value={hoursValues[i] ?? m.hours ?? ''}
 								autocomplete="off"
 							/>
 							{#if errors[`hours_${i}`]}<span class="err">{errors[`hours_${i}`]}</span>{/if}
@@ -82,7 +82,7 @@
 								name="hackatime_{i}"
 								class="input"
 								placeholder="my-cool-project"
-								value={hackatimeValues[i] ?? ''}
+								value={hackatimeValues[i] ?? m.hackatime ?? ''}
 								autocomplete="off"
 							/>
 						</div>

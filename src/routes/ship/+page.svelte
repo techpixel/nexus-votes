@@ -9,8 +9,10 @@
 	const errors = $derived<Record<string, string>>(
 		form && 'errors' in form ? (form.errors ?? {}) : {}
 	);
+	// After a failed submit, echo back what was typed; otherwise prefill from the
+	// server (the existing project when editing, empty when shipping fresh).
 	const values = $derived<Record<string, string>>(
-		form && 'values' in form ? (form.values ?? {}) : {}
+		form && 'values' in form ? (form.values ?? {}) : (data.values ?? {})
 	);
 
 	let submitting = $state(false);
@@ -19,7 +21,8 @@
 	let fileInput: HTMLInputElement | undefined = $state();
 	let dragOver = $state(false);
 	let fileName = $state('');
-	let previewUrl = $state<string | null>(null);
+	// svelte-ignore state_referenced_locally -- intentional one-time prefill from server
+	let previewUrl = $state<string | null>(data.screenshotUrl || null);
 
 	function setFile(files: FileList | null) {
 		const f = files?.[0];
@@ -41,7 +44,7 @@
 </script>
 
 <svelte:head>
-	<title>Ship your project · Horizons Nexus</title>
+	<title>{data.editing ? 'Edit your project' : 'Ship your project'} · Horizons Nexus</title>
 </svelte:head>
 
 <Backdrop variant="ship" />
@@ -65,7 +68,7 @@
 			}}
 		>
 			<BackLink href="/ship/team" />
-			<h1>Ship your project</h1>
+			<h1>{data.editing ? 'Edit your project' : 'Ship your project'}</h1>
 
 			{#if errors.form}
 				<p class="form-error">{errors.form}</p>
@@ -107,7 +110,7 @@
 					/>
 					{#if previewUrl}
 						<img class="preview" src={previewUrl} alt="Screenshot preview" />
-						<span class="dz-name">{fileName}</span>
+						<span class="dz-name">{fileName || 'Current screenshot — drop a new one to replace'}</span>
 					{:else}
 						<span class="dz-text">Drag and drop a screenshot</span>
 					{/if}

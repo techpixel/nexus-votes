@@ -16,9 +16,18 @@ export interface ShipDraft {
 	/**
 	 * One submission record per teammate, created in the Ship step. The Hours step
 	 * (/ship/hours) patches each with that person's hours + Hackatime project. The
-	 * submitter is always first.
+	 * submitter is always first. In an edit, each entry also carries the saved
+	 * hours/Hackatime so the Hours step can prefill them.
 	 */
-	memberRecords?: { email: string; recordId: string }[];
+	memberRecords?: { email: string; recordId: string; hours?: string; hackatime?: string }[];
+	/**
+	 * True when re-entering the flow to edit an already-shipped project. Each step
+	 * then updates the existing records in place (instead of creating new ones),
+	 * bypasses the already-shipped guard, and prefills from what's on file.
+	 */
+	editing?: boolean;
+	/** Teams-row record id — patched when the team number/members change in an edit */
+	teamRecordId?: string;
 	/** unix seconds */
 	exp: number;
 }

@@ -26,11 +26,23 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			} catch {
 				/* keep the local-part fallback */
 			}
-			return { id: m.recordId, name, isYou: m.email.trim().toLowerCase() === you };
+			return {
+				id: m.recordId,
+				name,
+				isYou: m.email.trim().toLowerCase() === you,
+				// Prefill the saved values when editing (empty on a fresh ship).
+				hours: m.hours ?? '',
+				hackatime: m.hackatime ?? ''
+			};
 		})
 	);
 
-	return { user: locals.user, projectName: draft.projectName ?? '', members };
+	return {
+		user: locals.user,
+		projectName: draft.projectName ?? '',
+		members,
+		editing: Boolean(draft.editing)
+	};
 };
 
 export const actions: Actions = {
@@ -92,13 +104,25 @@ export const actions: Actions = {
 			});
 		}
 
-		// Carry the submitter's record forward for the final cards step.
+		// Carry the submitter's record forward for the final cards step. Fold the
+		// just-saved hours/Hackatime back into memberRecords so going Back here
+		// re-prefills them, and preserve the edit context if we're editing.
+		const memberRecords = members.map((m, i) => ({
+			email: m.email,
+			recordId: m.recordId,
+			hours: hoursValues[i],
+			hackatime: hackatimeValues[i]
+		}));
 		cookies.set(
 			DRAFT_COOKIE,
 			sealDraft({
+				editing: draft.editing,
+				teamId: draft.teamId,
+				teamRecordId: draft.teamRecordId,
 				recordId: draft.recordId,
 				projectName: draft.projectName,
-				memberRecords: draft.memberRecords
+				teamMembers: draft.teamMembers,
+				memberRecords
 			}),
 			DRAFT_COOKIE_OPTIONS
 		);

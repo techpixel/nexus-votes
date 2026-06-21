@@ -64,6 +64,8 @@
 				</div>
 			{/if}
 		</dl>
+
+		<a class="edit" href="/ship/edit">Edit project</a>
 	</section>
 </main>
 
@@ -182,6 +184,27 @@
 		white-space: pre-wrap;
 		line-height: 1.45;
 		color: rgba(255, 255, 255, 0.85);
+	}
+
+	.edit {
+		display: block;
+		margin-top: 4px;
+		width: 100%;
+		text-align: center;
+		background: #fff;
+		color: #000;
+		border: 1px solid #fff;
+		border-radius: var(--radius-input);
+		padding: 12px;
+		font-size: 14px;
+		box-shadow: var(--shadow);
+		transition: filter 0.12s ease, transform 0.12s ease;
+	}
+	.edit:hover {
+		filter: brightness(0.92);
+	}
+	.edit:active {
+		transform: translateY(1px);
 	}
 
 	.hand {
