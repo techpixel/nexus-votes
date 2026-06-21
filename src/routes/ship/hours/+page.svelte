@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Backdrop from '$lib/components/Backdrop.svelte';
+	import BackLink from '$lib/components/BackLink.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -41,6 +42,7 @@
 			};
 		}}
 	>
+		<BackLink href="/ship" />
 		<h1>Hours per teammate</h1>
 		<p class="lead">
 			Set the hours spent and Hackatime project for each person on the team. If you’re tracking

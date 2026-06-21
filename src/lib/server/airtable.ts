@@ -171,6 +171,9 @@ export async function isTeamIdTaken(teamId: string): Promise<boolean> {
 export interface TeamProject {
 	/** Teams-table record id — used to link a vote to this team */
 	recordId: string;
+	/** Submission-table record id of the canonical project record (the one linked
+	 *  from the Teams row) — the record an edit must write back to. */
+	projectRecordId: string;
 	teamId: string;
 	projectName: string;
 	members: string[];
@@ -216,6 +219,15 @@ export async function getTeamProject(teamId: string): Promise<TeamProject | null
 	return p;
 }
 
+/**
+ * Drop any cached project for a team so the next {@link getTeamProject} re-fetches
+ * from Airtable. Call after editing a project so the change surfaces immediately
+ * on /ship/done and the public vote page instead of lingering for the cache TTL.
+ */
+export function invalidateTeamProject(teamId: string): void {
+	teamCache.delete(teamId);
+}
+
 async function fetchTeamProject(teamId: string): Promise<TeamProject | null> {
 	const { token, baseId, tableId } = config();
 	const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
@@ -243,6 +255,7 @@ async function fetchTeamProject(teamId: string): Promise<TeamProject | null> {
 	const attachments = (f['Screenshot'] as Array<{ url?: string }> | undefined) ?? [];
 	return {
 		recordId: team.id,
+		projectRecordId: projectIds[0],
 		teamId,
 		projectName: (f['Project Name'] as string) ?? 'Untitled project',
 		members: String(f['Team Members'] ?? '')

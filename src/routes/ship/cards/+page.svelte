@@ -15,6 +15,7 @@
 		type Suit
 	} from '$lib/cards';
 	import type { PageData, ActionData } from './$types';
+	import BackLink from '$lib/components/BackLink.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -226,6 +227,7 @@
 				};
 			}}
 		>
+			<BackLink href="/ship/hours" />
 			<h1>Add your cards</h1>
 
 			<div class="hand-box">

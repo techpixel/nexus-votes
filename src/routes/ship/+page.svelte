@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Backdrop from '$lib/components/Backdrop.svelte';
+	import BackLink from '$lib/components/BackLink.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -63,6 +64,7 @@
 				};
 			}}
 		>
+			<BackLink href="/ship/team" />
 			<h1>Ship your project</h1>
 
 			{#if errors.form}
