@@ -23,6 +23,20 @@
 <Backdrop variant="home" gradient={false} />
 
 <main>
+	<div class="vote-banner">
+		<p class="vote-text">
+			<span class="vote-at">VOTE @</span>
+			<span class="vote-domain">HORIZONS.NEXUS</span>
+		</p>
+		<img
+			class="vote-qr"
+			src="/art/vote-qr.png"
+			alt="Scan to vote at horizons.nexus"
+			width="100"
+			height="100"
+		/>
+	</div>
+
 	<div class="stats">
 		<div class="stat-card">
 			<span class="stat-num">{fmt(data.stats?.people)}</span>
@@ -41,16 +55,58 @@
 		z-index: 1;
 		min-height: 100dvh;
 		display: flex;
-		align-items: flex-end;
-		justify-content: center;
-		padding: 48px 24px 64px;
+		flex-direction: column;
+		align-items: center;
+		justify-content: space-between;
+		gap: 24px;
+		padding: 40px 24px 64px;
 	}
 
+	/* ---- Vote banner (top) ---- */
+	.vote-banner {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+		width: 100%;
+		max-width: 728px;
+		background: #000;
+		border: 4px solid #fff;
+		border-radius: 16px;
+		padding: 16px 24px;
+	}
+
+	.vote-text {
+		margin: 0;
+		font-family: 'Delius Unicase', var(--font);
+		font-weight: 400;
+		color: #fff;
+		text-align: center;
+		line-height: 1;
+		white-space: nowrap;
+	}
+	.vote-at {
+		font-size: clamp(16px, 2.4vw, 32px);
+	}
+	.vote-domain {
+		font-size: clamp(24px, 3.6vw, 48px);
+	}
+
+	.vote-qr {
+		flex: none;
+		width: clamp(64px, 9vw, 100px);
+		height: clamp(64px, 9vw, 100px);
+		display: block;
+		image-rendering: pixelated;
+		border-radius: 4px;
+	}
+
+	/* ---- Stat cards (bottom) ---- */
 	.stats {
 		display: flex;
-		gap: 28px;
+		gap: 39px;
 		width: 100%;
-		max-width: 1120px;
+		max-width: 1089px;
 		justify-content: center;
 	}
 
@@ -88,6 +144,9 @@
 	}
 
 	@media (max-width: 720px) {
+		.vote-banner {
+			gap: 16px;
+		}
 		.stats {
 			flex-direction: column;
 			align-items: center;

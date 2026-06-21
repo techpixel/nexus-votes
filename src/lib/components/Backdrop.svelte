@@ -72,8 +72,8 @@
 		object-position: center;
 	}
 	/* Rays spiral about their centre — very slow, barely-there drift, matching
-	   nexus_cards_html's hero spiral. scale(1.45) keeps the burst past the edges
-	   so the rotation never reveals a gap. */
+	   nexus_cards_html's hero spiral. scale(2) blows the burst well past the
+	   edges so it bleeds off the page and the rotation never reveals a gap. */
 	.home-mg {
 		transform-origin: center;
 		will-change: transform;
@@ -81,20 +81,20 @@
 	}
 	@keyframes homeSpin {
 		from {
-			transform: rotate(0deg) scale(1.45);
+			transform: rotate(0deg) scale(2);
 		}
 		to {
-			transform: rotate(360deg) scale(1.45);
+			transform: rotate(360deg) scale(2);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.home-mg {
 			animation: none;
-			transform: scale(1.45);
+			transform: scale(2);
 		}
 	}
 	.home-fg {
-		top: 44%;
+		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
 		width: min(46vw, 78vh);
