@@ -21,6 +21,10 @@ function themesFor(cards: string[]) {
 	return cards
 		.map((code) => resolveCard(code))
 		.filter((c): c is NonNullable<typeof c> => c !== null)
+		// The wildcard Joker "plays as anything" and carries no real theme, so voters
+		// shouldn't rate it — drop it from the form (and the POST validation built
+		// from the same list).
+		.filter((c) => !c.joker)
 		.filter((c) => !seen.has(c.frame) && seen.add(c.frame))
 		.map((c) => ({ frame: c.frame, theme: c.name.charAt(0).toUpperCase() + c.name.slice(1) }));
 }
