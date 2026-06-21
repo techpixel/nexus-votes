@@ -19,6 +19,12 @@ const TEAMS_TABLE_ID = 'tblwHPGJKjVTWvK2I'; // "Teams" table
 const VOTES_TABLE_ID = 'tbltm7bzBcivRfgIW'; // "Votes" table
 const USERS_TABLE_ID = 'tblLsdMMbx5T5L9S2'; // "Users" table
 
+// "Teams" row → every member's submission record (incl. the submitter). The
+// relational replacement for the free-text member list; the "Member Emails"
+// lookup on the Teams row rolls up each linked record's Email.
+const MEMBER_SUBMISSIONS_FIELD = 'Member Submissions';
+const MEMBER_EMAILS_LOOKUP_FIELD = 'Member Emails';
+
 function config() {
 	const token = env.AIRTABLE_TOKEN;
 	const baseId = env.AIRTABLE_BASE_ID || DEFAULT_BASE_ID;
@@ -296,16 +302,28 @@ async function fetchTeamProject(teamId: string): Promise<TeamProject | null> {
 	const proj = (await projRes.json()) as { fields: Record<string, unknown> };
 	const f = proj.fields;
 
+	// Team roster comes from the "Member Emails" lookup on the Teams row (rolled
+	// up across the linked member submissions). Fall back to the canonical
+	// record's free-text "Team Members" for teams not yet backfilled onto the
+	// link (or before the lookup field exists). Dedupe — a lookup can repeat.
+	const lookupEmails = Array.isArray(team.fields[MEMBER_EMAILS_LOOKUP_FIELD])
+		? (team.fields[MEMBER_EMAILS_LOOKUP_FIELD] as unknown[]).map((e) => String(e).trim())
+		: [];
+	const members = (
+		lookupEmails.length
+			? lookupEmails
+			: String(f['Team Members'] ?? '')
+					.split('\n')
+					.map((s) => s.trim())
+	).filter((v, i, a) => v && a.indexOf(v) === i);
+
 	const attachments = (f['Screenshot'] as Array<{ url?: string }> | undefined) ?? [];
 	return {
 		recordId: team.id,
 		projectRecordId: projectIds[0],
 		teamId,
 		projectName: (f['Project Name'] as string) ?? 'Untitled project',
-		members: String(f['Team Members'] ?? '')
-			.split('\n')
-			.map((s) => s.trim())
-			.filter(Boolean),
+		members,
 		screenshotUrl: attachments[0]?.url,
 		cards: String(f['Cards'] ?? '')
 			.split(/\s+/)
@@ -399,11 +417,21 @@ async function fetchShipStats(): Promise<ShipStats> {
 	return { projects: teams.size, people: people.size };
 }
 
-/** Create a Teams row linked to a project submission record. */
+/**
+ * Create a Teams row linked to a project submission record.
+ *
+ * `Project` is the canonical (submitter's) record; `Member Submissions` links
+ * every member's record so the "Member Emails" lookup can roll up the roster.
+ * The free-text `Members` is kept written in parallel as a fallback. At create
+ * time only the submitter's record usually exists — pass `memberRecordIds`
+ * (defaults to just the submitter) and patch the full set in once the teammate
+ * stubs are created (see {@link updateTeam}).
+ */
 export async function createTeam(opts: {
 	teamId: string;
 	members: string[];
 	projectRecordId: string;
+	memberRecordIds?: string[];
 }): Promise<{ id: string }> {
 	const { token, baseId } = config();
 	const res = await fetch(`${API_BASE}/${baseId}/${TEAMS_TABLE_ID}`, {
@@ -413,7 +441,8 @@ export async function createTeam(opts: {
 			fields: {
 				'Team ID': opts.teamId,
 				Members: opts.members.join('\n'),
-				Project: [opts.projectRecordId]
+				Project: [opts.projectRecordId],
+				[MEMBER_SUBMISSIONS_FIELD]: opts.memberRecordIds ?? [opts.projectRecordId]
 			},
 			typecast: true
 		})
@@ -425,15 +454,20 @@ export async function createTeam(opts: {
 	return (await res.json()) as { id: string };
 }
 
-/** Patch a Teams row — used to keep its Team ID / Members in sync after an edit. */
+/**
+ * Patch a Teams row — used to keep its Team ID / member list in sync after an
+ * edit, and to attach every member's submission record to the team. `members`
+ * (free-text) and `memberRecordIds` (the link) are kept consistent in parallel.
+ */
 export async function updateTeam(
 	teamRecordId: string,
-	fields: { teamId?: string; members?: string[] }
+	fields: { teamId?: string; members?: string[]; memberRecordIds?: string[] }
 ): Promise<void> {
 	const { token, baseId } = config();
-	const patch: Record<string, string> = {};
+	const patch: Record<string, string | string[]> = {};
 	if (fields.teamId !== undefined) patch['Team ID'] = fields.teamId;
 	if (fields.members !== undefined) patch['Members'] = fields.members.join('\n');
+	if (fields.memberRecordIds !== undefined) patch[MEMBER_SUBMISSIONS_FIELD] = fields.memberRecordIds;
 	const res = await fetch(`${API_BASE}/${baseId}/${TEAMS_TABLE_ID}/${teamRecordId}`, {
 		method: 'PATCH',
 		headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

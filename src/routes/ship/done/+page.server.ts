@@ -3,8 +3,10 @@ import type { PageServerLoad } from './$types';
 import {
 	findTeamSubmissionByMember,
 	getTeamProject,
-	enrichOwnSubmission
+	enrichOwnSubmission,
+	listTeamSubmissions
 } from '$lib/server/airtable';
+import { lookupAttendeeByEmail } from '$lib/server/horizons';
 import { cardsFromCodes, playedFrames, handIndexByName, handMult, themeLabel } from '$lib/cards';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -41,6 +43,26 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// enrichment is opportunistic — the summary below still renders without it
 	}
 
+	// Per-member hours. Each teammate has their own submission record carrying
+	// "Optional - Override Hours Spent"; resolve a friendly display name per
+	// person (and never ship the raw email to the browser, matching /ship/hours).
+	// Falls back to an empty list if Airtable is unconfigured/unreachable.
+	const you = locals.user.email.trim().toLowerCase();
+	const members = await Promise.all(
+		(await listTeamSubmissions(existing.teamId)).map(async (m) => {
+			let name = m.email.split('@')[0];
+			try {
+				const attendee = await lookupAttendeeByEmail(m.email);
+				if (attendee?.name) name = attendee.name;
+			} catch {
+				/* keep the local-part fallback */
+			}
+			return { name, isYou: m.email.trim().toLowerCase() === you, hours: m.hours };
+		})
+	);
+	// Show the viewer first, then alphabetically by name.
+	members.sort((a, b) => Number(b.isYou) - Number(a.isYou) || a.name.localeCompare(b.name));
+
 	// Resolve the played hand into its mult + the themes it actually uses.
 	let playedHand = '';
 	let playedMult = 0;
@@ -62,6 +84,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		playableUrl: project?.playableUrl ?? '',
 		codeUrl: project?.codeUrl ?? '',
 		screenshotUrl: project?.screenshotUrl ?? '',
+		members,
 		playedHand,
 		playedMult,
 		playedThemes

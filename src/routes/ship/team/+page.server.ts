@@ -187,7 +187,11 @@ export const actions: Actions = {
 			);
 			if (draft?.teamRecordId) {
 				try {
-					await updateTeam(draft.teamRecordId, { teamId, members: team });
+					await updateTeam(draft.teamRecordId, {
+						teamId,
+						members: team,
+						memberRecordIds: newMemberRecords.map((m) => m.recordId)
+					});
 				} catch (e) {
 					console.error('updateTeam (edit) failed:', e);
 				}

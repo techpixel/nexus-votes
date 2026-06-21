@@ -63,6 +63,24 @@
 					<dd><a href={data.codeUrl} target="_blank" rel="noopener noreferrer">{data.codeUrl}</a></dd>
 				</div>
 			{/if}
+
+			{#if data.members.length}
+				<div class="row">
+					<dt>Hours per teammate</dt>
+					<dd>
+						<ul class="members">
+							{#each data.members as m, i (i)}
+								<li>
+									<span class="m-name">
+										{m.name}{#if m.isYou}<span class="m-tag">you</span>{/if}
+									</span>
+									<span class="m-hours">{m.hours ? `${m.hours}h` : '—'}</span>
+								</li>
+							{/each}
+						</ul>
+					</dd>
+				</div>
+			{/if}
 		</dl>
 
 		<a class="edit" href="/ship/edit">Edit project</a>
@@ -184,6 +202,42 @@
 		white-space: pre-wrap;
 		line-height: 1.45;
 		color: rgba(255, 255, 255, 0.85);
+	}
+
+	.members {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.members li {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 12px;
+		padding: 6px 0;
+		border-top: 1px solid rgba(255, 255, 255, 0.1);
+	}
+	.members li:first-child {
+		border-top: none;
+		padding-top: 0;
+	}
+	.m-name {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 6px;
+	}
+	.m-tag {
+		font-size: 10px;
+		color: #000;
+		background: #fff;
+		border-radius: 999px;
+		padding: 1px 6px;
+	}
+	.m-hours {
+		color: rgba(255, 255, 255, 0.85);
+		white-space: nowrap;
 	}
 
 	.edit {

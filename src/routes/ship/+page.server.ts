@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import {
 	createSubmission,
 	createTeam,
+	updateTeam,
 	nextTeamId,
 	uploadScreenshot,
 	updateSubmission,
@@ -282,8 +283,11 @@ export const actions: Actions = {
 		}
 
 		// Index the team in the Teams table, linked to this project (best-effort).
+		// `Member Submissions` starts with the submitter's record and is extended to
+		// the whole roster once the teammate stubs are created below.
+		let teamRecordId: string | undefined;
 		try {
-			await createTeam({ teamId, members: team, projectRecordId: recordId });
+			({ id: teamRecordId } = await createTeam({ teamId, members: team, projectRecordId: recordId }));
 		} catch {
 			// the submission is saved regardless of team-table indexing
 		}
@@ -317,6 +321,20 @@ export const actions: Actions = {
 				}
 			} catch (e) {
 				console.error('createSubmission (teammate stub) failed:', e);
+			}
+		}
+
+		// Attach every member's record to the team via the link field (and refresh
+		// the free-text member list) so the "Member Emails" lookup reflects the full
+		// roster. Best-effort — the submitter's record is already linked by createTeam.
+		if (teamRecordId && memberRecords.length > 1) {
+			try {
+				await updateTeam(teamRecordId, {
+					members: memberRecords.map((m) => m.email),
+					memberRecordIds: memberRecords.map((m) => m.recordId)
+				});
+			} catch (e) {
+				console.error('updateTeam (link members) failed:', e);
 			}
 		}
 
