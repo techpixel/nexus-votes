@@ -1,0 +1,81 @@
+/* ---- Phantom Sans (Hack Club brand font) ----
+   Hosted on Hack Club's asset CDN. This is a genuine Hack Club YSWS project,
+   and the Figma design specifies "Phantom Sans 0.8". A robust fallback stack
+   keeps the UI looking right if the CDN is unavailable. */
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.8/Regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.8/Medium.woff2') format('woff2');
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.8/Bold.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+/* m6x11 — pixel display font used on the vote page (from the nexus_cards prototype) */
+@font-face {
+	font-family: 'm6x11';
+	src: url('/fonts/m6x11.ttf') format('truetype');
+	font-weight: 400 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+:root {
+	--bg: #111111;
+	--font-pixel: 'm6x11', 'Phantom Sans', system-ui, sans-serif;
+	--card: #141414;
+	--input-bg: #202020;
+	--hc-red: #ff3f3f;
+	--text: #ffffff;
+	--muted: #858585;
+	--radius-input: 12px;
+	--radius-card: 20px;
+	--shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25);
+	--text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
+	--font: 'Phantom Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui,
+		sans-serif;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	min-height: 100%;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+body {
+	overflow-x: hidden;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+button {
+	font-family: inherit;
+}
