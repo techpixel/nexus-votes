@@ -16,15 +16,19 @@ import {
 	invalidateTeamProject
 } from '$lib/server/airtable';
 import { guardAlreadyShipped } from '$lib/server/ship-guard';
+import { guardEditingDisabled } from '$lib/server/editing';
+import { guardShippingDisabled } from '$lib/server/shipping';
 
 const lc = (s: string) => s.trim().toLowerCase();
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
 	const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
-	// While editing, the team has already shipped — bypass the guard that would
-	// otherwise bounce them to /ship/done.
+	guardEditingDisabled(draft?.editing);
+	// While editing, the team has already shipped — bypass the guards that would
+	// otherwise bounce them to /ship/done or /ship/closed.
 	if (!draft?.editing) await guardAlreadyShipped(locals.user.email);
+	guardShippingDisabled(draft?.editing);
 	// Prefill anything already chosen this session (minus the submitter). Resolve
 	// each stored email back to the directory so the UI can show a Slack username +
 	// avatar — and so the browser only ever receives an opaque record id, never the
@@ -59,7 +63,9 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(302, '/');
 		const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
 		const editing = Boolean(draft?.editing);
+		guardEditingDisabled(editing);
 		if (!editing) await guardAlreadyShipped(locals.user.email);
+		guardShippingDisabled(editing);
 		const user = locals.user;
 
 		const form = await request.formData();

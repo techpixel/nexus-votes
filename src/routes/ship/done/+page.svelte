@@ -83,7 +83,9 @@
 			{/if}
 		</dl>
 
-		<a class="edit" href="/ship/edit">Edit project</a>
+		{#if data.editingEnabled}
+			<a class="edit" href="/ship/edit">Edit project</a>
+		{/if}
 	</section>
 </main>
 

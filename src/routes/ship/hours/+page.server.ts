@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { updateSubmission, isAirtableConfigured } from '$lib/server/airtable';
 import { lookupAttendeeByEmail } from '$lib/server/horizons';
 import { DRAFT_COOKIE, DRAFT_COOKIE_OPTIONS, sealDraft, unsealDraft } from '$lib/server/draft';
+import { guardEditingDisabled } from '$lib/server/editing';
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
@@ -49,6 +50,7 @@ export const actions: Actions = {
 	default: async ({ request, locals, cookies }) => {
 		if (!locals.user) throw redirect(302, '/');
 		const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
+		guardEditingDisabled(draft?.editing);
 		if (!draft?.recordId || !draft.memberRecords?.length) throw redirect(302, '/ship');
 
 		const form = await request.formData();

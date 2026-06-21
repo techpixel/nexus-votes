@@ -14,14 +14,18 @@ import {
 } from '$lib/server/airtable';
 import { DRAFT_COOKIE, DRAFT_COOKIE_OPTIONS, sealDraft, unsealDraft } from '$lib/server/draft';
 import { guardAlreadyShipped } from '$lib/server/ship-guard';
+import { guardEditingDisabled } from '$lib/server/editing';
+import { guardShippingDisabled } from '$lib/server/shipping';
 
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024; // 5 MB (Airtable inline upload limit)
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
 	const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
+	guardEditingDisabled(draft?.editing);
 	if (!draft?.editing) {
 		await guardAlreadyShipped(locals.user.email);
+		guardShippingDisabled(draft?.editing);
 		// Same `values` shape as the editing branch below so PageData stays a single
 		// consistent type (avoids a Record<string, string> mismatch in +page.svelte).
 		return {
@@ -69,10 +73,14 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(302, '/');
 		const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
 		const editing = Boolean(draft?.editing);
+		guardEditingDisabled(editing);
 		// Integrity guard: never create a second record for someone whose team
 		// has already shipped, even via a stale tab posting straight here. (Editing
 		// is the legitimate way back in, so skip the guard then.)
 		if (!editing) await guardAlreadyShipped(locals.user.email);
+		// Hard stop on new ships when shipping is closed — this is the action that
+		// actually creates the submission records, so the flag must gate it here.
+		guardShippingDisabled(editing);
 
 		const form = await request.formData();
 		const projectName = String(form.get('projectName') ?? '').trim();

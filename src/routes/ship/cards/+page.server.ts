@@ -8,6 +8,7 @@ import {
 	isAirtableConfigured
 } from '$lib/server/airtable';
 import { DRAFT_COOKIE, unsealDraft } from '$lib/server/draft';
+import { guardEditingDisabled } from '$lib/server/editing';
 import {
 	cardsFromCodes,
 	bestHandIndex,
@@ -52,6 +53,7 @@ export const actions: Actions = {
 	default: async ({ request, locals, cookies }) => {
 		if (!locals.user) throw redirect(302, '/');
 		const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
+		guardEditingDisabled(draft?.editing);
 		if (!draft?.recordId) throw redirect(302, '/ship');
 
 		const form = await request.formData();

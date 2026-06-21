@@ -12,9 +12,16 @@ import { resolveCard } from '$lib/cards';
 const isValidTeamId = (id: string) => /^[1-9]\d*$/.test(id);
 
 function themesFor(cards: string[]) {
+	// A team may stack duplicate cards to form poker hands (Five of a Kind, etc.)
+	// for the score multiplier, so `cards` can list the same frame more than once.
+	// Voters rate each distinct theme once — dedupe by frame so the form doesn't
+	// render the same theme twice (which also crashes the keyed {#each}) or
+	// double-count it in the average.
+	const seen = new Set<string>();
 	return cards
 		.map((code) => resolveCard(code))
 		.filter((c): c is NonNullable<typeof c> => c !== null)
+		.filter((c) => !seen.has(c.frame) && seen.add(c.frame))
 		.map((c) => ({ frame: c.frame, theme: c.name.charAt(0).toUpperCase() + c.name.slice(1) }));
 }
 

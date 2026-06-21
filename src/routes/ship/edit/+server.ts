@@ -6,6 +6,7 @@ import {
 	listTeamSubmissions
 } from '$lib/server/airtable';
 import { DRAFT_COOKIE, DRAFT_COOKIE_OPTIONS, sealDraft } from '$lib/server/draft';
+import { isEditingEnabled } from '$lib/server/editing';
 
 /**
  * Entry point for editing an already-shipped project. Rather than a separate edit
@@ -16,6 +17,10 @@ import { DRAFT_COOKIE, DRAFT_COOKIE_OPTIONS, sealDraft } from '$lib/server/draft
  */
 export const GET: RequestHandler = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
+
+	// Editing locked (e.g. after the submission deadline) → no edit session; the
+	// summary still renders read-only.
+	if (!isEditingEnabled()) throw redirect(303, '/ship/done');
 
 	// Nothing on file → there's nothing to edit; send them into the ship flow.
 	const existing = await findTeamSubmissionByMember(locals.user.email);

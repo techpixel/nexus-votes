@@ -7,6 +7,7 @@ import {
 	listTeamSubmissions
 } from '$lib/server/airtable';
 import { lookupAttendeeByEmail } from '$lib/server/horizons';
+import { isEditingEnabled } from '$lib/server/editing';
 import { cardsFromCodes, playedFrames, handIndexByName, handMult, themeLabel } from '$lib/cards';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -87,6 +88,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		members,
 		playedHand,
 		playedMult,
-		playedThemes
+		playedThemes,
+		editingEnabled: isEditingEnabled()
 	};
 };
