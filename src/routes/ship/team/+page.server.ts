@@ -8,9 +8,24 @@ import { guardAlreadyShipped } from '$lib/server/ship-guard';
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(302, '/');
 	await guardAlreadyShipped(locals.user.email);
-	// Prefill anything already chosen this session (minus the submitter).
+	// Prefill anything already chosen this session (minus the submitter). Resolve
+	// each email back to the directory so the UI can show a Slack username +
+	// avatar instead of a bare email address.
 	const draft = unsealDraft(cookies.get(DRAFT_COOKIE));
-	const teammates = (draft?.teamMembers ?? []).filter((e) => e !== locals.user!.email);
+	const teammateEmails = (draft?.teamMembers ?? []).filter((e) => e !== locals.user!.email);
+	const teammates = await Promise.all(
+		teammateEmails.map(async (email) => {
+			try {
+				const a = await lookupAttendeeByEmail(email);
+				if (a) {
+					return { email: a.email, name: a.name, slackId: a.slackId, slackUsername: a.slackUsername };
+				}
+			} catch {
+				/* fall through to the bare-email fallback */
+			}
+			return { email, name: email };
+		})
+	);
 	return { user: locals.user, teammates, teamId: draft?.teamId ?? '' };
 };
 

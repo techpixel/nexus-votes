@@ -13,6 +13,12 @@ export interface ShipDraft {
 	/** set once the project record is created in the Ship step */
 	recordId?: string;
 	projectName?: string;
+	/**
+	 * One submission record per teammate, created in the Ship step. The Hours step
+	 * (/ship/hours) patches each with that person's hours + Hackatime project. The
+	 * submitter is always first.
+	 */
+	memberRecords?: { email: string; recordId: string }[];
 	/** unix seconds */
 	exp: number;
 }

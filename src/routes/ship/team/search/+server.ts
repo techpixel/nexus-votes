@@ -10,5 +10,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (q.length < 2) return json({ results: [] });
 
 	const results = await searchAttendeesBySlack(q, 8);
-	return json({ results: results.map((a) => ({ email: a.email, name: a.name })) });
+	return json({
+		results: results.map((a) => ({
+			email: a.email,
+			name: a.name,
+			slackId: a.slackId,
+			slackUsername: a.slackUsername
+		}))
+	});
 };

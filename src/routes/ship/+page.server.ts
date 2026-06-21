@@ -43,8 +43,6 @@ export const actions: Actions = {
 		const playableLink = String(form.get('playableLink') ?? '').trim();
 		const githubRepo = String(form.get('githubRepo') ?? '').trim();
 		const description = String(form.get('description') ?? '').trim();
-		const hackatime = String(form.get('hackatime') ?? '').trim();
-		const hoursRaw = String(form.get('hours') ?? '').trim();
 		const howHeard = String(form.get('howHeard') ?? '').trim();
 		const doingWell = String(form.get('doingWell') ?? '').trim();
 		const improve = String(form.get('improve') ?? '').trim();
@@ -55,8 +53,6 @@ export const actions: Actions = {
 			playableLink,
 			githubRepo,
 			description,
-			hackatime,
-			hours: hoursRaw,
 			howHeard,
 			doingWell,
 			improve
@@ -78,15 +74,6 @@ export const actions: Actions = {
 		else if (!isUrl(githubRepo)) errors.githubRepo = 'Enter a full URL (https://…).';
 
 		if (!description) errors.description = 'Add a project description.';
-		if (!hackatime) errors.hackatime = 'Enter your Hackatime project name.';
-
-		let hours: number | null = null;
-		if (hoursRaw === '') {
-			errors.hours = 'Enter your estimated hours.';
-		} else {
-			hours = Number(hoursRaw);
-			if (Number.isNaN(hours) || hours < 0) errors.hours = 'Enter a number of hours.';
-		}
 
 		if (Object.keys(errors).length) return fail(400, { errors, values });
 
@@ -116,8 +103,6 @@ export const actions: Actions = {
 		};
 		const ghUser = parseGithubUsername(githubRepo);
 		if (ghUser) sharedFields['GitHub Username'] = ghUser;
-		if (hackatime) sharedFields['Hackatime Project Name'] = hackatime;
-		if (hours !== null) sharedFields['Optional - Override Hours Spent'] = hours;
 
 		// The submitter's own record: shared project data + their identity.
 		const fields: Record<string, string | number> = {
@@ -188,19 +173,32 @@ export const actions: Actions = {
 		// (that's only available once the teammate signs in themselves). Best-effort —
 		// the submitter's own ship is already saved either way. Only the submitter's
 		// record is linked from the Teams table (the canonical project record).
+		//
+		// Each created record is tracked (submitter first) so the next step
+		// (/ship/hours) can set every member's hours + Hackatime project individually.
+		const memberRecords: { email: string; recordId: string }[] = [
+			{ email: locals.user.email, recordId }
+		];
 		const teammateEmails = team.filter(
 			(e) => e.trim().toLowerCase() !== locals.user!.email.trim().toLowerCase()
 		);
 		for (const email of teammateEmails) {
 			try {
-				await createSubmission({ ...sharedFields, Email: email });
+				const { id } = await createSubmission({ ...sharedFields, Email: email });
+				memberRecords.push({ email, recordId: id });
 			} catch (e) {
 				console.error('createSubmission (teammate stub) failed:', e);
 			}
 		}
 
-		// Hand off to step 2 (add your cards) with a signed reference to the record.
-		cookies.set(DRAFT_COOKIE, sealDraft({ recordId, projectName }), DRAFT_COOKIE_OPTIONS);
-		throw redirect(303, '/ship/cards');
+		// Hand off to the Hours step (set per-member hours + Hackatime) with a signed
+		// reference to every member's record. recordId/projectName are carried through
+		// for the final cards step.
+		cookies.set(
+			DRAFT_COOKIE,
+			sealDraft({ recordId, projectName, memberRecords }),
+			DRAFT_COOKIE_OPTIONS
+		);
+		throw redirect(303, '/ship/hours');
 	}
 };

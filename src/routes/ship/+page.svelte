@@ -154,35 +154,6 @@
 				{#if errors.description}<span class="err">{errors.description}</span>{/if}
 			</div>
 
-			<div class="field">
-				<label for="hackatime">Hackatime Project Name</label>
-				<input
-					id="hackatime"
-					name="hackatime"
-					class="input"
-					class:invalid={errors.hackatime}
-					placeholder="my-cool-project"
-					value={values.hackatime ?? ''}
-					autocomplete="off"
-				/>
-				{#if errors.hackatime}<span class="err">{errors.hackatime}</span>{/if}
-			</div>
-
-			<div class="field">
-				<label for="hours">Estimated Hours Spent</label>
-				<span class="hint">If you’re tracking time with hackatime, put that number here.</span>
-				<input
-					id="hours"
-					name="hours"
-					class="input"
-					class:invalid={errors.hours}
-					placeholder="0"
-					inputmode="decimal"
-					value={values.hours ?? ''}
-				/>
-				{#if errors.hours}<span class="err">{errors.hours}</span>{/if}
-			</div>
-
 			<div class="button-spacing">
 				<button class="submit" type="submit" disabled={submitting}>
 					{submitting ? 'Submitting…' : 'Next'}
@@ -257,12 +228,6 @@
 		font-size: 14px;
 		font-weight: 400;
 		color: #fff;
-		text-shadow: var(--text-shadow);
-	}
-
-	.hint {
-		font-size: 12px;
-		color: var(--muted);
 		text-shadow: var(--text-shadow);
 	}
 

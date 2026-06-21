@@ -23,6 +23,9 @@ ENV NODE_ENV=production
 
 # adapter-node listens on $PORT (default 3000) and $HOST (default 0.0.0.0).
 ENV PORT=3000
+# Disable adapter-node's request body size limit (default 512K) so large
+# uploads (e.g. project images on /ship) aren't rejected before route code runs.
+ENV BODY_SIZE_LIMIT=Infinity
 EXPOSE 3000
 
 # Run as the unprivileged user that ships with the node image.
