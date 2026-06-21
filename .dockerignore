@@ -1,0 +1,28 @@
+# Dependencies & build artifacts (reinstalled/rebuilt inside the image)
+node_modules
+build
+.svelte-kit
+.output
+.vercel
+.netlify
+.wrangler
+
+# Secrets — never copy real env files into the image
+.env
+.env.*
+!.env.example
+
+# Version control & tooling
+.git
+.gitignore
+.vscode
+.dockerignore
+Dockerfile
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+README.md
