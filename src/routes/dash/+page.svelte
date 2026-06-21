@@ -7,6 +7,15 @@
 	// Render the live count, or an em-dash placeholder when stats are unavailable.
 	const fmt = (n: number | undefined) =>
 		typeof n === 'number' ? n.toLocaleString('en-US') : '—';
+
+	// Tap anywhere on the scoreboard to toggle fullscreen (kiosk display mode).
+	function toggleFullscreen() {
+		if (document.fullscreenElement) {
+			document.exitFullscreen();
+		} else {
+			document.documentElement.requestFullscreen?.();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -19,6 +28,8 @@
 		href="https://fonts.googleapis.com/css2?family=Delius+Unicase:wght@400;700&display=swap"
 	/>
 </svelte:head>
+
+<svelte:window onclick={toggleFullscreen} />
 
 <Backdrop variant="home" gradient={false} />
 
