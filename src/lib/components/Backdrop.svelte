@@ -1,27 +1,24 @@
 <script lang="ts">
-	// Layered decorative background, faithful to the Figma frame (1366 x 768).
-	// The .stage is sized to always COVER the viewport while preserving the
-	// design's aspect ratio, so every layer keeps its relative position.
+	// Decorative background. The home variant is a single full-bleed image;
+	// the ship variant keeps the layered Figma composition (1366 x 768), with
+	// the .stage sized to COVER the viewport while preserving its ratio.
 	let { variant = 'home' }: { variant?: 'home' | 'ship' } = $props();
 </script>
 
 <div class="backdrop {variant}" aria-hidden="true">
-	<div class="stage">
-		{#if variant === 'home'}
-			<img class="layer texture" src="/art/art9.png" alt="" />
-			<img class="layer doodle-left" src="/art/art7.png" alt="" />
-			<img class="layer doodle-right" src="/art/art8.png" alt="" />
-			<img class="layer rays" src="/art/art25.png" alt="" />
-			<img class="layer orb" src="/art/art26.png" alt="" />
-			<img class="layer logo" src="/art/nexus.svg" alt="Horizons Nexus" />
-			<div class="layer gradient"></div>
-		{:else}
-			<img class="layer ship-texture" src="/art/art9.png" alt="" />
-			<img class="layer ship-left" src="/art/art7.png" alt="" />
-			<img class="layer ship-right" src="/art/art8.png" alt="" />
+	{#if variant === 'home'}
+		<img class="home-layer home-bg" src="/art/landing-bg.png" alt="" />
+		<img class="home-layer home-mg" src="/art/landing-mg.png" alt="" />
+		<img class="home-layer home-fg" src="/art/landing-fg.png" alt="Horizons Nexus" />
+		<div class="home-gradient"></div>
+	{:else}
+		<div class="stage">
+			<img class="layer ship-texture" src="/art/art9.webp" alt="" />
+			<img class="layer ship-left" src="/art/leftnexus.png" alt="" />
+			<img class="layer ship-right" src="/art/rightnexus.png" alt="" />
 			<div class="layer scrim"></div>
-		{/if}
-	</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -56,51 +53,55 @@
 	}
 
 	/* ---- HOME ---- */
-	.texture {
-		left: -0.952%;
-		top: -16.855%;
-		width: 100.952%;
-		height: 134.602%;
+	/* Three stacked depth layers: doodle texture (back), ray burst (mid),
+	   circular Horizons Nexus logo (front focal point). */
+	.home-layer {
+		position: absolute;
+		display: block;
+		pointer-events: none;
 	}
-	.doodle-left {
-		left: -0.952%;
-		top: -15.606%;
-		width: 44.02%;
-		height: 126.061%;
-		object-position: 0% 50%;
-	}
-	.doodle-right {
-		left: 56.008%;
-		top: -15.527%;
-		width: 43.992%;
-		height: 125.981%;
-		object-position: 100% 50%;
-	}
-	.rays {
-		left: 0;
-		top: -13.021%;
-		width: 100%;
-		height: 133.398%;
-	}
-	.orb {
-		left: 25.11%;
-		top: 4.367%;
-		width: 48.878%;
-		height: 86.652%;
-		object-position: 50% 50%;
-	}
-	.logo {
-		left: 26.578%;
-		top: 20.387%;
-		width: 46.045%;
-		height: 37.029%;
-		object-fit: contain;
-	}
-	.gradient {
-		left: 0;
-		top: 0;
+	.home-bg,
+	.home-mg {
+		inset: 0;
 		width: 100%;
 		height: 100%;
+		object-fit: cover;
+		object-position: center;
+	}
+	/* Rays spiral about their centre — very slow, barely-there drift, matching
+	   nexus_cards_html's hero spiral. scale(1.32) keeps the burst past the edges
+	   so the rotation never reveals a gap. */
+	.home-mg {
+		transform-origin: center;
+		will-change: transform;
+		animation: homeSpin 240s linear infinite;
+	}
+	@keyframes homeSpin {
+		from {
+			transform: rotate(0deg) scale(1.32);
+		}
+		to {
+			transform: rotate(360deg) scale(1.32);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.home-mg {
+			animation: none;
+			transform: scale(1.32);
+		}
+	}
+	.home-fg {
+		top: 44%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: min(46vw, 78vh);
+		aspect-ratio: 1;
+		object-fit: contain;
+	}
+	.home-gradient {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
 		background: linear-gradient(to top, #000 13.462%, rgba(0, 0, 0, 0));
 	}
 

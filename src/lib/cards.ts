@@ -1,11 +1,11 @@
 // Balatro-style card catalogue, ported from the nexus_cards_html prototype.
-// Each card has a full-art sprite (static/cards/<frame>.png) plus its playing-card
+// Each card has a full-art sprite (static/cards/<frame>.webp) plus its playing-card
 // identity: r = rank (2-10, J=11, Q=12, K=13, A=14), s = suit (C/S/H/D).
 
 export type Suit = 'C' | 'S' | 'H' | 'D';
 
 export interface Card {
-	/** sprite id — image lives at /cards/<frame>.png */
+	/** sprite id — image lives at /cards/<frame>.webp */
 	frame: string;
 	/** themed art name, e.g. "uranium" */
 	name: string;
@@ -131,7 +131,7 @@ export function resolveCard(input: string): Card | null {
 	return null;
 }
 
-export const cardImage = (card: Card): string => `/cards/${card.frame}.png`;
+export const cardImage = (card: Card): string => `/cards/${card.frame}.webp`;
 
 /** Playing-card label, e.g. "Queen of Hearts" (or "Joker" for the wildcard). */
 export const cardLabel = (card: Card): string =>

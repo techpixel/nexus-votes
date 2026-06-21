@@ -272,7 +272,7 @@
 <main>
 	{#if form && 'success' in form && form.success}
 		<section class="card done">
-			<div class="badge"><img src="/art/jellybeans.png" alt="" /></div>
+			<div class="badge"><img src="/art/jellybeans.webp" alt="" /></div>
 			<h1>{form.projectName} is shipped!</h1>
 			<p>Thanks, {data.user.firstName || 'friend'} — your project and cards are in.</p>
 			{#if form.photoWarning}

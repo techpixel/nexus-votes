@@ -73,7 +73,7 @@
 				{#each data.themes as t (t.frame)}
 					<div class="rate-row">
 						<div class="card-tilt">
-							<img class="card" src="/cards/{t.frame}.png" alt="" use:tilt />
+							<img class="card" src="/cards/{t.frame}.webp" alt="" use:tilt />
 						</div>
 						<div class="rate-body">
 							<p class="theme">Theme: {t.theme}</p>

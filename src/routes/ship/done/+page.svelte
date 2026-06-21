@@ -18,7 +18,7 @@
 
 <main>
 	<section class="card done">
-		<div class="badge"><img src="/art/jellybeans.png" alt="" /></div>
+		<div class="badge"><img src="/art/jellybeans.webp" alt="" /></div>
 		<h1>{data.projectName} is shipped!</h1>
 	</section>
 </main>
