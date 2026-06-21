@@ -3,7 +3,7 @@
 	import Backdrop from '$lib/components/Backdrop.svelte';
 	import type { PageData, ActionData } from './$types';
 
-	type Member = { email: string; name: string; slackId?: string; slackUsername?: string };
+	type Member = { id: string; name: string; slackId?: string; slackUsername?: string };
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -46,15 +46,18 @@
 		}
 	}
 
-	function isOnTeam(email: string) {
+	// A result is "on the team" if it's already picked, or if it's the signed-in
+	// user themselves — matched by Slack ID, since the browser no longer receives
+	// email addresses to compare against.
+	function isOnTeam(member: Member) {
 		return (
-			email.toLowerCase() === data.user.email.toLowerCase() ||
-			teammates.some((t) => t.email.toLowerCase() === email.toLowerCase())
+			(!!member.slackId && member.slackId === data.user?.slackId) ||
+			teammates.some((t) => t.id === member.id)
 		);
 	}
 
 	function pick(member: Member) {
-		if (isOnTeam(member.email)) {
+		if (isOnTeam(member)) {
 			error = `${member.name} is already on the team.`;
 		} else {
 			teammates = [...teammates, member];
@@ -63,8 +66,8 @@
 		results = [];
 	}
 
-	function removeMember(email: string) {
-		teammates = teammates.filter((t) => t.email !== email);
+	function removeMember(id: string) {
+		teammates = teammates.filter((t) => t.id !== id);
 	}
 
 	// Slack avatars come from Cachet — /users/{slackId}/r 302-redirects straight
@@ -136,7 +139,7 @@
 						<span class="m-email">you</span>
 					</span>
 				</li>
-				{#each teammates as m (m.email)}
+				{#each teammates as m (m.id)}
 					<li class="member">
 						{@render avatar(m.slackId, m.name)}
 						<span class="m-text">
@@ -147,7 +150,7 @@
 							type="button"
 							class="remove"
 							title="Remove {m.name}"
-							onclick={() => removeMember(m.email)}>×</button
+							onclick={() => removeMember(m.id)}>×</button
 						>
 					</li>
 				{/each}
@@ -169,12 +172,12 @@
 					{:else if results.length === 0}
 						<li class="dd-empty">No matches</li>
 					{:else}
-						{#each results as r (r.email)}
+						{#each results as r (r.id)}
 							<li>
 								<button
 									type="button"
 									class="dd-item"
-									disabled={isOnTeam(r.email)}
+									disabled={isOnTeam(r)}
 									onclick={() => pick(r)}
 								>
 									{@render avatar(r.slackId, r.name)}
@@ -192,7 +195,7 @@
 		{#if error}<span class="err">{error}</span>{/if}
 		{#if form?.error}<p class="form-error">{form.error}</p>{/if}
 
-		<input type="hidden" name="teammates" value={teammates.map((t) => t.email).join('\n')} />
+		<input type="hidden" name="teammates" value={teammates.map((t) => t.id).join('\n')} />
 
 		<div class="button-spacing">
 			<button class="submit" type="submit" disabled={submitting}>

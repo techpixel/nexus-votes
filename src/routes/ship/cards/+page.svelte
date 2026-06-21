@@ -19,6 +19,15 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const MAX_CARDS = 5;
+	// You may stack duplicate cards (up to a full hand of the same one). This unlocks
+	// the "not so secret" hands — Five of a Kind (5 of a rank), Flush House (3+2 of a
+	// suit), and even Flush Five (5 identical cards).
+	const MAX_COPIES = 5;
+
+	// A hand can now hold duplicate cards, so a frame no longer uniquely identifies a
+	// slot. Each added card gets its own uid for keying the list and removing one copy.
+	type HandCard = Card & { uid: number };
+	let uidSeq = 0;
 
 	// Every card in natural playing order: 2 → Ace, then Clubs · Spades · Hearts · Diamonds.
 	// The wildcard Joker has no rank/suit, so it always sorts to the end.
@@ -38,7 +47,7 @@
 		return (h % 17) - 8;
 	}
 
-	let hand = $state<Card[]>([]);
+	let hand = $state<HandCard[]>([]);
 	let query = $state('');
 	let open = $state(false);
 	let root: HTMLDivElement | undefined = $state();
@@ -46,8 +55,14 @@
 	let submitting = $state(false);
 
 	const codes = $derived(hand.map(cardCode).join(' '));
-	const inHand = $derived(new Set(hand.map((c) => c.frame)));
-	const available = $derived(ALL_CARDS.filter((c) => !inHand.has(c.frame)));
+	// How many copies of each card frame are already in the hand.
+	const handCounts = $derived.by(() => {
+		const counts = new Map<string, number>();
+		for (const c of hand) counts.set(c.frame, (counts.get(c.frame) ?? 0) + 1);
+		return counts;
+	});
+	// A card stays searchable until the hand holds the max number of copies of it.
+	const available = $derived(ALL_CARDS.filter((c) => (handCounts.get(c.frame) ?? 0) < MAX_COPIES));
 
 	// Cards matching the search box — by theme name, description, playing-card
 	// name ("queen of hearts"), or short code ("QH"). Empty query lists them all.
@@ -98,7 +113,11 @@
 			error = `A hand is at most ${MAX_CARDS} cards.`;
 			return;
 		}
-		hand = [...hand, card];
+		if ((handCounts.get(card.frame) ?? 0) >= MAX_COPIES) {
+			error = `You can stack at most ${MAX_COPIES} of the same card.`;
+			return;
+		}
+		hand = [...hand, { ...card, uid: uidSeq++ }];
 		query = '';
 		open = false;
 	}
@@ -112,8 +131,8 @@
 		addCard(first);
 	}
 
-	function removeCard(frame: string) {
-		hand = hand.filter((c) => c.frame !== frame);
+	function removeCard(uid: number) {
+		hand = hand.filter((c) => c.uid !== uid);
 	}
 
 	function onKeydown(e: KeyboardEvent) {
@@ -214,7 +233,7 @@
 					<span class="hand-empty">Your hand will appear here</span>
 				{:else}
 					<div class="hand">
-						{#each displayHand as card, i (card.frame)}
+						{#each displayHand as card, i (card.uid)}
 							<button
 								type="button"
 								class="play-card"
@@ -222,7 +241,7 @@
 								style="--pos: {fanPos(i, displayHand.length)}; --rot: {fanRot(i, displayHand.length)}deg"
 								title="Remove {cardLabel(card)}"
 								aria-label="Remove {cardLabel(card)}"
-								onclick={() => removeCard(card.frame)}
+								onclick={() => removeCard(card.uid)}
 							>
 								<span class="card-face">
 									<img src={cardImage(card)} alt="" />
@@ -311,6 +330,9 @@
 											<span class="theme">Theme: {themeLabel(card)}</span>
 											<span class="play">{cardLabel(card)}</span>
 										</span>
+										{#if (handCounts.get(card.frame) ?? 0) > 0}
+											<span class="result-have">{handCounts.get(card.frame)} in hand · add more</span>
+										{/if}
 										<span class="result-add" aria-hidden="true">+</span>
 									</button>
 								</li>
@@ -761,6 +783,19 @@
 	.result-text .play {
 		font-size: 16px;
 		color: #ccc;
+	}
+
+	/* "already in your hand" hint — only shows for cards you can still stack a 2nd of */
+	.result-have {
+		flex: none;
+		margin-left: auto;
+		font-size: 11px;
+		color: var(--muted);
+		white-space: nowrap;
+	}
+	/* when the hint is present it owns the right-shove, so the + sits snug beside it */
+	.result-have + .result-add {
+		margin-left: 10px;
 	}
 
 	/* plus affordance on the right of each result row */

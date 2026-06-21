@@ -52,12 +52,11 @@
 		{/if}
 
 		<ul class="members">
-			{#each data.members as m, i (m.email)}
+			{#each data.members as m, i (m.id)}
 				<li class="member">
 					<div class="m-head">
 						<span class="m-name">{m.name}</span>
 						{#if m.isYou}<span class="m-tag">you</span>{/if}
-						{#if m.name !== m.email}<span class="m-email">{m.email}</span>{/if}
 					</div>
 					<div class="m-fields">
 						<div class="field">
@@ -195,10 +194,6 @@
 		background: #fff;
 		border-radius: 999px;
 		padding: 1px 8px;
-	}
-	.m-email {
-		font-size: 12px;
-		color: var(--muted);
 	}
 	.m-fields {
 		display: grid;

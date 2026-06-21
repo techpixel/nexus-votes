@@ -133,6 +133,18 @@ export async function lookupAttendeeByEmail(email: string): Promise<HorizonsAtte
 }
 
 /**
+ * Exact lookup by Airtable record id — the opaque handle exposed to the browser
+ * in place of an email. Record ids are case-sensitive, so callers must not
+ * normalise case before passing one in.
+ */
+export async function lookupAttendeeByRecordId(recordId: string): Promise<HorizonsAttendee | null> {
+	const clean = recordId.trim();
+	if (!clean) return null;
+	const dir = await getDirectory();
+	return dir.find((a) => a.recordId === clean) ?? null;
+}
+
+/**
  * Sign-in gate: is this email present in the Horizons attendee view (the same
  * VIEW the directory is fetched from)? True only for people Airtable shows in
  * that view, so sign-in is limited to registered attendees.

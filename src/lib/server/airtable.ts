@@ -302,21 +302,29 @@ async function fetchShipStats(): Promise<ShipStats> {
 	const { token, baseId, tableId } = config();
 
 	const people = new Set<string>();
-	let projects = 0;
+	// A project is one TEAM, not one submission record. Each ship creates a
+	// record per team member (a "stub" for everyone besides the submitter), all
+	// sharing the same Team ID — so counting records multiplies every project by
+	// its head count. Dedupe by Team ID instead.
+	const teams = new Set<string>();
 	let offset: string | undefined;
 	for (let page = 0; page < 50; page++) {
 		const url =
 			`${API_BASE}/${baseId}/${tableId}?pageSize=100` +
 			`&fields%5B%5D=Email&fields%5B%5D=${encodeURIComponent('Team Members')}` +
+			`&fields%5B%5D=${encodeURIComponent('Team ID')}` +
 			(offset ? `&offset=${encodeURIComponent(offset)}` : '');
 		const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 		if (!res.ok) throw new Error(`Stats lookup failed (${res.status})`);
 		const data = (await res.json()) as {
-			records?: Array<{ fields: Record<string, unknown> }>;
+			records?: Array<{ id: string; fields: Record<string, unknown> }>;
 			offset?: string;
 		};
 		for (const r of data.records ?? []) {
-			projects++;
+			// Fall back to the record id if a Team ID is somehow missing, so a
+			// project is never dropped (and never collapsed with another team).
+			const teamId = String(r.fields['Team ID'] ?? '').trim();
+			teams.add(teamId || r.id);
 			const submitter = String(r.fields['Email'] ?? '')
 				.trim()
 				.toLowerCase();
@@ -331,7 +339,7 @@ async function fetchShipStats(): Promise<ShipStats> {
 		offset = data.offset;
 		if (!offset) break;
 	}
-	return { projects, people: people.size };
+	return { projects: teams.size, people: people.size };
 }
 
 /** Create a Teams row linked to a project submission record. */

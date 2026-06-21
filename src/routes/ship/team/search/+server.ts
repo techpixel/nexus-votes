@@ -10,9 +10,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (q.length < 2) return json({ results: [] });
 
 	const results = await searchAttendeesBySlack(q, 8);
+	// Expose only an opaque record id as the teammate handle — never the email.
+	// The submit action resolves the id back to a directory record server-side.
 	return json({
 		results: results.map((a) => ({
-			email: a.email,
+			id: a.recordId,
 			name: a.name,
 			slackId: a.slackId,
 			slackUsername: a.slackUsername

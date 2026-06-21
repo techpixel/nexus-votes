@@ -14,17 +14,19 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 
 	const you = locals.user.email.trim().toLowerCase();
 	// Resolve a friendly display name per member from the (cached) Horizons
-	// directory; fall back to the email if the lookup misses or errors.
+	// directory. The browser only ever receives a display name + the opaque record
+	// id (used as a key + to patch the row by index) — never the email. If the
+	// lookup misses, fall back to the email's local-part so no full address ships.
 	const members = await Promise.all(
 		draft.memberRecords.map(async (m) => {
-			let name = m.email;
+			let name = m.email.split('@')[0];
 			try {
 				const attendee = await lookupAttendeeByEmail(m.email);
 				if (attendee?.name) name = attendee.name;
 			} catch {
-				/* fall back to the email */
+				/* keep the local-part fallback */
 			}
-			return { email: m.email, name, isYou: m.email.trim().toLowerCase() === you };
+			return { id: m.recordId, name, isYou: m.email.trim().toLowerCase() === you };
 		})
 	);
 
