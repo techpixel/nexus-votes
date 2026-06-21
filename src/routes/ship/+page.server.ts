@@ -168,8 +168,11 @@ export const actions: Actions = {
 					contentType: screenshot.type || 'image/png',
 					filename: screenshot.name || 'screenshot.png'
 				});
-			} catch {
-				// record is saved; the screenshot can be re-added later
+			} catch (e) {
+				// Record is saved; the screenshot can be re-added later. Log the raw
+				// Airtable error (e.g. a 403 from the content/upload API) so a failed
+				// upload is diagnosable instead of vanishing silently.
+				console.error('uploadScreenshot failed:', e);
 			}
 		}
 

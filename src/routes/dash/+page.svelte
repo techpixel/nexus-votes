@@ -1,8 +1,29 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Backdrop from '$lib/components/Backdrop.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Seed once from the server load, then refresh in the background. A failed
+	// poll leaves the previous counts on screen rather than blanking the board.
+	let stats = $state(untrack(() => data.stats));
+	const POLL_MS = 30_000;
+
+	$effect(() => {
+		const tick = async () => {
+			try {
+				const res = await fetch('/dash/stats');
+				if (!res.ok) return;
+				const next = (await res.json()).stats;
+				if (next) stats = next;
+			} catch {
+				// keep the last-shown numbers on a transient failure
+			}
+		};
+		const id = setInterval(tick, POLL_MS);
+		return () => clearInterval(id);
+	});
 
 	// Render the live count, or an em-dash placeholder when stats are unavailable.
 	const fmt = (n: number | undefined) =>
@@ -50,11 +71,11 @@
 
 	<div class="stats">
 		<div class="stat-card">
-			<span class="stat-num">{fmt(data.stats?.people)}</span>
+			<span class="stat-num">{fmt(stats?.people)}</span>
 			<span class="stat-label">People have shipped</span>
 		</div>
 		<div class="stat-card">
-			<span class="stat-num">{fmt(data.stats?.projects)}</span>
+			<span class="stat-num">{fmt(stats?.projects)}</span>
 			<span class="stat-label">Projects shipped</span>
 		</div>
 	</div>

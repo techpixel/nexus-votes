@@ -66,7 +66,8 @@ export const actions: Actions = {
 						contentType: photo.type || 'image/png',
 						filename: photo.name || 'cards.png'
 					});
-				} catch {
+				} catch (e) {
+					console.error('uploadCardsPhoto failed:', e);
 					photoWarning = 'Your cards were saved, but the photo failed to upload.';
 				}
 			}
