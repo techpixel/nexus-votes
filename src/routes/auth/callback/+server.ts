@@ -1,6 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { exchangeCodeForToken, fetchIdentity, primaryAddress } from '$lib/server/auth';
+import { isEligibleAttendee } from '$lib/server/horizons';
 import { upsertUser } from '$lib/server/airtable';
 import { SESSION_COOKIE, COOKIE_OPTIONS, seal } from '$lib/server/session';
 
@@ -27,6 +28,27 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	if (!identity.primary_email) {
 		throw error(400, 'Hack Club did not return an email for this account.');
+	}
+
+	// Sign-in gate: only people on the Horizons attendee view may sign in. Done
+	// before any user record is created or a session is minted, so a blocked
+	// account leaves no trace. Fails closed: if the directory can't be verified
+	// while it's configured, we reject rather than admit everyone.
+	let eligible: boolean;
+	try {
+		eligible = await isEligibleAttendee(identity.primary_email);
+	} catch (err) {
+		console.error('Horizons eligibility check failed:', err);
+		throw error(
+			503,
+			'We could not verify your Horizons registration right now. Please try signing in again in a moment.'
+		);
+	}
+	if (!eligible) {
+		throw error(
+			403,
+			'Sign-in is limited to registered Horizons attendees, and the email on your Hack Club account is not on the attendee list. If you believe this is a mistake, reach out to an organizer.'
+		);
 	}
 
 	// Record/refresh this voter in the Users table. Fails open internally, so a

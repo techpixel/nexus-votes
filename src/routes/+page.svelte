@@ -1,8 +1,5 @@
 <script lang="ts">
 	import Backdrop from '$lib/components/Backdrop.svelte';
-	import type { PageData } from './$types';
-
-	let { data }: { data: PageData } = $props();
 </script>
 
 <svelte:head>
@@ -16,9 +13,6 @@
 	<div class="cta">
 		<p class="prompt">Sign in to vote at Horizons Nexus</p>
 		<a class="signin" href="/auth/login">Sign in with Hack Club</a>
-		{#if data.dev}
-			<a class="dev" href="/auth/dev-login">Dev login (skip OAuth)</a>
-		{/if}
 	</div>
 </main>
 
@@ -66,15 +60,5 @@
 	}
 	.signin:active {
 		transform: translateY(1px);
-	}
-
-	.dev {
-		font-size: 12px;
-		color: var(--muted);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.dev:hover {
-		color: #fff;
 	}
 </style>

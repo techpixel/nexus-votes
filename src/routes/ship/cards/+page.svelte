@@ -1,7 +1,19 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Backdrop from '$lib/components/Backdrop.svelte';
-	import { CARDS, cardImage, cardLabel, cardCode, type Card, type Suit } from '$lib/cards';
+	import {
+		CARDS,
+		cardImage,
+		cardLabel,
+		cardCode,
+		themeLabel,
+		handOptions,
+		playedFrames,
+		handName,
+		handMult,
+		type Card,
+		type Suit
+	} from '$lib/cards';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -18,124 +30,12 @@
 			SUIT_ORDER[a.s ?? 'C'] - SUIT_ORDER[b.s ?? 'C']
 	);
 
-	const themeLabel = (card: Card) => card.name.charAt(0).toUpperCase() + card.name.slice(1);
-
 	// A stable, scattered tilt per card (−8°…8°) so the list looks hand-dealt rather
 	// than uniform. Derived from the frame id so it never re-rolls between renders.
 	function cardTilt(frame: string): number {
 		let h = 0;
 		for (let i = 0; i < frame.length; i++) h = (h * 31 + frame.charCodeAt(i)) >>> 0;
 		return (h % 17) - 8;
-	}
-
-	// ---- automatic poker-hand detection ----
-	const HAND_NAMES = [
-		'High Card', 'Pair', 'Two Pair', 'Three of a Kind', 'Straight',
-		'Flush', 'Full House', 'Four of a Kind', 'Straight Flush', 'Royal Flush'
-	];
-	const ALL_SUITS: Suit[] = ['C', 'S', 'H', 'D'];
-
-	// Rank a 1–5 card hand; returns an index into HAND_NAMES (higher = better).
-	function rankHand(cards: { r: number; s: Suit }[]): number {
-		const n = cards.length;
-		if (n === 0) return -1;
-		const rankCount = new Map<number, number>();
-		const suits = new Set<Suit>();
-		for (const c of cards) {
-			rankCount.set(c.r, (rankCount.get(c.r) ?? 0) + 1);
-			suits.add(c.s);
-		}
-		const counts = [...rankCount.values()].sort((a, b) => b - a);
-		const flush = n === 5 && suits.size === 1;
-		let straight = false;
-		let high = 0;
-		if (n === 5 && rankCount.size === 5) {
-			const rs = [...rankCount.keys()].sort((a, b) => a - b);
-			if (rs[4] - rs[0] === 4) {
-				straight = true;
-				high = rs[4];
-			} else if (rs[0] === 2 && rs[4] === 14 && rs[3] === 5) {
-				straight = true; // wheel: A-2-3-4-5
-				high = 5;
-			}
-		}
-		if (straight && flush) return high === 14 ? 9 : 8;
-		if (counts[0] === 4) return 7;
-		if (counts[0] === 3 && counts[1] === 2) return 6;
-		if (flush) return 5;
-		if (straight) return 4;
-		if (counts[0] === 3) return 3;
-		if (counts[0] === 2 && counts[1] === 2) return 2;
-		if (counts[0] === 2) return 1;
-		return 0;
-	}
-
-	// Each wildcard (the Joker) tries every rank/suit; keep the strongest result.
-	function bestHand(concrete: { r: number; s: Suit }[], wild: number): number {
-		if (wild === 0) return rankHand(concrete);
-		let best = -1;
-		for (let r = 2; r <= 14; r++)
-			for (const s of ALL_SUITS) best = Math.max(best, bestHand([...concrete, { r, s }], wild - 1));
-		return best;
-	}
-
-	// Hands that score with all five cards (vs. of-a-kind hands that leave kickers out).
-	const ALL_FIVE = new Set([4, 5, 6, 8, 9]);
-
-	// Detected hand name + the set of card frames that actually form it. Cards not in
-	// the set are "kickers" (e.g. the 5th card alongside four of a kind) and get dimmed.
-	function analyzeHand(cards: Card[]): { name: string; played: Set<string> } {
-		const played = new Set<string>();
-		if (cards.length === 0) return { name: '', played };
-
-		const jokers = cards.filter((c) => c.joker || c.r === undefined || c.s === undefined);
-		const concrete = cards.filter((c) => !c.joker && c.r !== undefined && c.s !== undefined);
-		const cat = bestHand(
-			concrete.map((c) => ({ r: c.r as number, s: c.s as Suit })),
-			jokers.length
-		);
-		const name = HAND_NAMES[cat] ?? '';
-
-		if (ALL_FIVE.has(cat)) {
-			for (const c of cards) played.add(c.frame);
-			return { name, played };
-		}
-
-		// Group concrete cards by rank, biggest groups (then highest rank) first.
-		const byRank = new Map<number, Card[]>();
-		for (const c of concrete) {
-			const arr = byRank.get(c.r as number) ?? [];
-			arr.push(c);
-			byRank.set(c.r as number, arr);
-		}
-		const groups = [...byRank.entries()]
-			.map(([r, cs]) => ({ r, cs }))
-			.sort((a, b) => b.cs.length - a.cs.length || b.r - a.r);
-
-		const jokerFrames = jokers.map((j) => j.frame);
-		let jIdx = 0;
-		const take = (g: { r: number; cs: Card[] } | undefined, need: number) => {
-			let have = 0;
-			for (const c of g?.cs ?? []) {
-				played.add(c.frame);
-				have++;
-			}
-			while (have < need && jIdx < jokerFrames.length) {
-				played.add(jokerFrames[jIdx++]);
-				have++;
-			}
-		};
-
-		if (cat === 7) take(groups[0], 4); // four of a kind
-		else if (cat === 3) take(groups[0], 3); // three of a kind
-		else if (cat === 2) {
-			take(groups[0], 2); // two pair
-			take(groups[1] ?? groups[0], 2);
-		} else if (cat === 1) take(groups[0], 2); // pair
-		else if (jokerFrames.length) played.add(jokerFrames[0]); // high card (wild is highest)
-		else played.add(concrete.reduce((a, b) => ((a.r as number) >= (b.r as number) ? a : b)).frame);
-
-		return { name, played };
 	}
 
 	let hand = $state<Card[]>([]);
@@ -163,10 +63,23 @@
 		);
 	});
 
-	// Detected poker hand + which cards contribute to it (Joker counts as wild).
-	const handInfo = $derived(analyzeHand(hand));
-	const handName = $derived(handInfo.name);
-	const played = $derived(handInfo.played);
+	// ---- poker hand: every hand these cards can form, best first (Joker = wild) ----
+	const options = $derived(handOptions(hand));
+	const bestIdx = $derived(options[0] ?? -1);
+
+	// The hand the player has chosen to play. Null = follow the best automatically;
+	// once they pick, we honour it until it's no longer formable (cards changed).
+	let picked = $state<number | null>(null);
+	const activeHand = $derived(picked !== null && options.includes(picked) ? picked : bestIdx);
+
+	// Reset a stale manual pick when the formable hands change underneath it.
+	$effect(() => {
+		if (picked !== null && !options.includes(picked)) picked = null;
+	});
+
+	const playedHandName = $derived(activeHand >= 0 ? handName(activeHand) : '');
+	const playedMult = $derived(activeHand >= 0 ? handMult(activeHand) : 0);
+	const played = $derived(playedFrames(hand, activeHand));
 
 	// Auto-sorted for display: scoring cards first, then by rank (Ace high, Joker leads).
 	const displayHand = $derived.by(() => {
@@ -323,7 +236,9 @@
 						{/each}
 					</div>
 					<div class="hand-label">
-						<p class="hand-name">{handName}</p>
+						<p class="hand-name">
+							{playedHandName}{#if playedMult}<span class="mult">×{playedMult} mult</span>{/if}
+						</p>
 						<p class="hand-themes">
 							{displayHand
 								.filter((c) => played.has(c.frame))
@@ -333,6 +248,26 @@
 					</div>
 				{/if}
 			</div>
+
+			{#if options.length > 1}
+				<div class="hand-picker">
+					<span class="picker-label">Play this hand as:</span>
+					<div class="picker-options">
+						{#each options as idx (idx)}
+							<button
+								type="button"
+								class="hand-chip"
+								class:active={idx === activeHand}
+								onclick={() => (picked = idx)}
+							>
+								<span class="chip-name">{handName(idx)}</span>
+								<span class="chip-mult">×{handMult(idx)}</span>
+							</button>
+						{/each}
+					</div>
+					<span class="picker-hint">Only the themes in the chosen hand count.</span>
+				</div>
+			{/if}
 
 			{#if hand.length > 0}
 				<span class="remove-hint">Click a card to remove it</span>
@@ -416,6 +351,7 @@
 			</div>
 
 			<input type="hidden" name="cards" value={codes} />
+			<input type="hidden" name="playedHand" value={playedHandName} />
 			{#if form && 'error' in form && form.error}
 				<p class="form-error">{form.error}</p>
 			{/if}
@@ -617,11 +553,74 @@
 		color: #fff;
 		text-shadow: var(--text-shadow);
 	}
+	.hand-name .mult {
+		margin-left: 8px;
+		padding: 1px 7px;
+		border-radius: 6px;
+		background: var(--hc-red);
+		color: #fff;
+		font-size: 12px;
+		vertical-align: middle;
+		box-shadow: var(--shadow);
+	}
 	.hand-themes {
 		margin: 3px 0 0;
 		padding: 0 16px;
 		font-size: 12px;
 		color: #ccc;
+	}
+
+	/* ---- "play this hand as" picker (only when >1 hand is possible) ---- */
+	.hand-picker {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 6px;
+		padding-top: 4px;
+	}
+	.picker-label {
+		font-size: 13px;
+		color: #fff;
+		text-shadow: var(--text-shadow);
+	}
+	.picker-options {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 6px;
+	}
+	.hand-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		background: var(--input-bg);
+		border: 1px solid rgba(255, 255, 255, 0.5);
+		border-radius: 999px;
+		padding: 6px 12px;
+		color: #fff;
+		font-family: inherit;
+		font-size: 13px;
+		cursor: pointer;
+		box-shadow: var(--shadow);
+		transition: border-color 0.12s ease, background 0.12s ease, filter 0.12s ease;
+	}
+	.hand-chip:hover {
+		filter: brightness(1.15);
+	}
+	.hand-chip.active {
+		border-color: var(--hc-red);
+		background: #2a2020;
+	}
+	.chip-mult {
+		font-size: 11px;
+		color: #ffb3b3;
+	}
+	.hand-chip.active .chip-mult {
+		color: #fff;
+	}
+	.picker-hint {
+		font-size: 11px;
+		color: var(--muted);
 	}
 
 	/* ---- card search ---- */

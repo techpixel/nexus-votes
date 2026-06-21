@@ -131,3 +131,19 @@ export async function lookupAttendeeByEmail(email: string): Promise<HorizonsAtte
 	const dir = await getDirectory();
 	return dir.find((a) => a.email === clean) ?? null;
 }
+
+/**
+ * Sign-in gate: is this email present in the Horizons attendee view (the same
+ * VIEW the directory is fetched from)? True only for people Airtable shows in
+ * that view, so sign-in is limited to registered attendees.
+ *
+ * When the directory token isn't configured the gate is treated as disabled
+ * (returns true) so non-prod deployments without HORIZONS_AIRTABLE_TOKEN still
+ * work. When it *is* configured, a failed directory fetch propagates (throws) so
+ * the caller can fail closed on a transient error rather than admit everyone.
+ */
+export async function isEligibleAttendee(email: string): Promise<boolean> {
+	if (!isHorizonsConfigured()) return true;
+	const attendee = await lookupAttendeeByEmail(email);
+	return attendee !== null;
+}

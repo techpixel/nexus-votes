@@ -146,3 +146,206 @@ export function cardCode(card: Card): string {
 		card.r === 14 ? 'A' : card.r === 13 ? 'K' : card.r === 12 ? 'Q' : card.r === 11 ? 'J' : String(card.r);
 	return `${rank}${card.s}`;
 }
+
+/** Title-cased theme name for a card, e.g. "uranium" → "Uranium". */
+export const themeLabel = (card: Card): string => card.name.charAt(0).toUpperCase() + card.name.slice(1);
+
+/** Resolve a list of stored codes (e.g. "AS QH 5S") to cards, dropping unknowns. */
+export function cardsFromCodes(codes: string[]): Card[] {
+	return codes
+		.map((code) => resolveCard(code))
+		.filter((c): c is Card => c !== null);
+}
+
+// ---- poker-hand evaluation (Balatro-flavoured) ----------------------------
+// Used on the "Add your cards" step to detect what hand the chosen cards make,
+// let the player pick among the hands they can form, and show its mult. The
+// catalogue + mults come from the Horizons "Score Guide" and include the three
+// Balatro "secret" hands (Five of a Kind, Flush House, Flush Five), which in
+// this single-of-each deck are only reachable with a wildcard Joker.
+
+export interface HandType {
+	/** display name, e.g. "Two Pair" */
+	name: string;
+	/** score multiplier shown next to the played hand */
+	mult: number;
+}
+
+// Ordered by strength: the index is the strength rank (higher beats lower) and
+// is what the evaluator returns. Keep this order stable — other helpers index
+// into it by position.
+export const HAND_TYPES: HandType[] = [
+	{ name: 'High Card', mult: 1 }, //        0
+	{ name: 'One Pair', mult: 3 }, //         1
+	{ name: 'Two Pair', mult: 4 }, //         2
+	{ name: 'Three of a Kind', mult: 4 }, //  3
+	{ name: 'Straight', mult: 5 }, //         4
+	{ name: 'Flush', mult: 5 }, //            5
+	{ name: 'Full House', mult: 6 }, //       6
+	{ name: 'Four of a Kind', mult: 7 }, //   7
+	{ name: 'Straight Flush', mult: 8 }, //   8
+	{ name: 'Five of a Kind', mult: 8 }, //   9
+	{ name: 'Flush House', mult: 10 }, //    10
+	{ name: 'Royal Flush', mult: 12 }, //    11
+	{ name: 'Flush Five', mult: 12 } //      12
+];
+
+const HAND_INDEX_BY_NAME = new Map(HAND_TYPES.map((h, i) => [h.name.toLowerCase(), i]));
+
+// Hands scored with all five cards (vs. of-a-kind hands that leave kickers out).
+const ALL_FIVE = new Set([4, 5, 6, 8, 9, 10, 11, 12]);
+
+const ALL_SUITS: Suit[] = ['C', 'S', 'H', 'D'];
+
+interface RankedCard {
+	r: number;
+	s: Suit;
+}
+
+/** Rank a 1–5 card hand of concrete (non-wild) cards; returns a HAND_TYPES index. */
+function rankConcrete(cards: RankedCard[]): number {
+	const n = cards.length;
+	if (n === 0) return -1;
+	const rankCount = new Map<number, number>();
+	const suits = new Set<Suit>();
+	for (const c of cards) {
+		rankCount.set(c.r, (rankCount.get(c.r) ?? 0) + 1);
+		suits.add(c.s);
+	}
+	const counts = [...rankCount.values()].sort((a, b) => b - a);
+	const flush = n === 5 && suits.size === 1;
+	let straight = false;
+	let high = 0;
+	if (n === 5 && rankCount.size === 5) {
+		const rs = [...rankCount.keys()].sort((a, b) => a - b);
+		if (rs[4] - rs[0] === 4) {
+			straight = true;
+			high = rs[4];
+		} else if (rs[0] === 2 && rs[4] === 14 && rs[3] === 5) {
+			straight = true; // wheel: A-2-3-4-5
+			high = 5;
+		}
+	}
+
+	if (counts[0] === 5 && flush) return 12; // Flush Five
+	if (flush && counts[0] === 3 && counts[1] === 2) return 10; // Flush House
+	if (counts[0] === 5) return 9; // Five of a Kind
+	if (straight && flush) return high === 14 ? 11 : 8; // Royal / Straight Flush
+	if (counts[0] === 4) return 7; // Four of a Kind
+	if (counts[0] === 3 && counts[1] === 2) return 6; // Full House
+	if (flush) return 5; // Flush
+	if (straight) return 4; // Straight
+	if (counts[0] === 3) return 3; // Three of a Kind
+	if (counts[0] === 2 && counts[1] === 2) return 2; // Two Pair
+	if (counts[0] === 2) return 1; // One Pair
+	return 0; // High Card
+}
+
+// Each wildcard (Joker) tries every rank/suit; keep the strongest result.
+function bestConcrete(concrete: RankedCard[], wild: number): number {
+	if (wild === 0) return rankConcrete(concrete);
+	let best = -1;
+	for (let r = 2; r <= 14; r++)
+		for (const s of ALL_SUITS) best = Math.max(best, bestConcrete([...concrete, { r, s }], wild - 1));
+	return best;
+}
+
+function splitWild(cards: Card[]): { concrete: RankedCard[]; wild: number } {
+	const concrete: RankedCard[] = [];
+	let wild = 0;
+	for (const c of cards) {
+		if (c.joker || c.r === undefined || c.s === undefined) wild++;
+		else concrete.push({ r: c.r, s: c.s });
+	}
+	return { concrete, wild };
+}
+
+/** Best hand index these cards can make (Joker counts as wild); -1 if no cards. */
+export function bestHandIndex(cards: Card[]): number {
+	const { concrete, wild } = splitWild(cards);
+	return bestConcrete(concrete, wild);
+}
+
+/**
+ * Every distinct hand the chosen cards can be played as, strongest first (each a
+ * HAND_TYPES index). Found by ranking every non-empty subset of the cards, so a
+ * Full House also surfaces Three of a Kind, Two Pair, One Pair and High Card —
+ * each a real alternative that commits a different set of themes. Capped at the
+ * 5-card hand limit, so this is at most 31 subsets.
+ */
+export function handOptions(cards: Card[]): number[] {
+	const n = cards.length;
+	if (n === 0) return [];
+	const found = new Set<number>();
+	for (let mask = 1; mask < 1 << n; mask++) {
+		const subset = cards.filter((_, i) => (mask & (1 << i)) !== 0);
+		const cat = bestHandIndex(subset);
+		if (cat >= 0) found.add(cat);
+	}
+	return [...found].sort((a, b) => b - a);
+}
+
+/**
+ * Which card frames actually form the given hand category (the rest are kickers).
+ * Of-a-kind hands keep only the matched group (+ wild fillers); the five-card
+ * hands use everything.
+ */
+export function playedFrames(cards: Card[], categoryIndex: number): Set<string> {
+	const played = new Set<string>();
+	if (cards.length === 0 || categoryIndex < 0) return played;
+
+	if (ALL_FIVE.has(categoryIndex)) {
+		for (const c of cards) played.add(c.frame);
+		return played;
+	}
+
+	const jokers = cards.filter((c) => c.joker || c.r === undefined || c.s === undefined);
+	const concrete = cards.filter((c) => !c.joker && c.r !== undefined && c.s !== undefined);
+
+	// Group concrete cards by rank, biggest groups (then highest rank) first.
+	const byRank = new Map<number, Card[]>();
+	for (const c of concrete) {
+		const arr = byRank.get(c.r as number) ?? [];
+		arr.push(c);
+		byRank.set(c.r as number, arr);
+	}
+	const groups = [...byRank.entries()]
+		.map(([r, cs]) => ({ r, cs }))
+		.sort((a, b) => b.cs.length - a.cs.length || b.r - a.r);
+
+	const jokerFrames = jokers.map((j) => j.frame);
+	let jIdx = 0;
+	const take = (g: { r: number; cs: Card[] } | undefined, need: number) => {
+		let have = 0;
+		for (const c of g?.cs ?? []) {
+			played.add(c.frame);
+			have++;
+		}
+		while (have < need && jIdx < jokerFrames.length) {
+			played.add(jokerFrames[jIdx++]);
+			have++;
+		}
+	};
+
+	if (categoryIndex === 7) take(groups[0], 4); // four of a kind
+	else if (categoryIndex === 3) take(groups[0], 3); // three of a kind
+	else if (categoryIndex === 2) {
+		take(groups[0], 2); // two pair
+		take(groups[1] ?? groups[0], 2);
+	} else if (categoryIndex === 1) take(groups[0], 2); // one pair
+	else if (jokerFrames.length) played.add(jokerFrames[0]); // high card (wild is highest)
+	else if (concrete.length)
+		played.add(concrete.reduce((a, b) => ((a.r as number) >= (b.r as number) ? a : b)).frame);
+
+	return played;
+}
+
+/** HAND_TYPES index for a stored hand name (case-insensitive); -1 if unknown. */
+export const handIndexByName = (name: string): number =>
+	HAND_INDEX_BY_NAME.get(name.trim().toLowerCase()) ?? -1;
+
+/** Display name for a hand index, or '' if out of range. */
+export const handName = (index: number): string => HAND_TYPES[index]?.name ?? '';
+
+/** Mult for a hand index, or 0 if out of range. */
+export const handMult = (index: number): number => HAND_TYPES[index]?.mult ?? 0;

@@ -17,9 +17,53 @@
 </header>
 
 <main>
-	<section class="card done">
-		<div class="badge"><img src="/art/jellybeans.webp" alt="" /></div>
-		<h1>{data.projectName} is shipped!</h1>
+	<section class="card">
+		<div class="head">
+			<div class="badge"><img src="/art/jellybeans.webp" alt="" /></div>
+			<h1>{data.projectName} is shipped!</h1>
+			<p class="sub">Here's what your team submitted.</p>
+		</div>
+
+		{#if data.screenshotUrl}
+			<img class="shot" src={data.screenshotUrl} alt="{data.projectName} screenshot" />
+		{/if}
+
+		<dl class="summary">
+			{#if data.playedHand}
+				<div class="row">
+					<dt>Played hand</dt>
+					<dd>
+						<span class="hand">
+							{data.playedHand}{#if data.playedMult}<span class="mult">×{data.playedMult} mult</span>{/if}
+						</span>
+						{#if data.playedThemes.length}
+							<span class="themes">{data.playedThemes.join(', ')}</span>
+						{/if}
+					</dd>
+				</div>
+			{/if}
+
+			{#if data.description}
+				<div class="row">
+					<dt>Description</dt>
+					<dd class="desc">{data.description}</dd>
+				</div>
+			{/if}
+
+			{#if data.playableUrl}
+				<div class="row">
+					<dt>Playable URL</dt>
+					<dd><a href={data.playableUrl} target="_blank" rel="noopener noreferrer">{data.playableUrl}</a></dd>
+				</div>
+			{/if}
+
+			{#if data.codeUrl}
+				<div class="row">
+					<dt>GitHub repo</dt>
+					<dd><a href={data.codeUrl} target="_blank" rel="noopener noreferrer">{data.codeUrl}</a></dd>
+				</div>
+			{/if}
+		</dl>
 	</section>
 </main>
 
@@ -61,36 +105,103 @@
 		max-width: 100%;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 16px;
 		background: var(--card);
 		backdrop-filter: blur(6px);
 		-webkit-backdrop-filter: blur(6px);
 		border-radius: var(--radius-card);
-		padding: 25px 26px;
+		padding: 32px 26px;
 		box-shadow: var(--shadow);
 	}
 
-	.done {
+	.head {
+		display: flex;
+		flex-direction: column;
 		align-items: center;
 		text-align: center;
-		gap: 12px;
-		padding: 40px 26px;
+		gap: 8px;
 	}
-	.done .badge img {
+	.badge img {
 		width: 72px;
 		height: auto;
 		display: block;
 	}
-	.done h1 {
+	h1 {
 		margin: 0;
 		font-size: 22px;
 		font-weight: 500;
 		color: #fff;
 		text-shadow: var(--text-shadow);
 	}
-	.done p {
+	.sub {
+		margin: 0;
+		font-size: 13px;
+		color: var(--muted);
+	}
+
+	.shot {
+		width: 100%;
+		max-height: 180px;
+		object-fit: cover;
+		border: 1px solid rgba(255, 255, 255, 0.4);
+		border-radius: var(--radius-input);
+	}
+
+	.summary {
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.row {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	dt {
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--muted);
+	}
+	dd {
 		margin: 0;
 		font-size: 14px;
-		color: rgba(255, 255, 255, 0.75);
+		color: #fff;
+		word-break: break-word;
+	}
+	dd a {
+		color: #fff;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	dd a:hover {
+		color: var(--hc-red);
+	}
+	.desc {
+		white-space: pre-wrap;
+		line-height: 1.45;
+		color: rgba(255, 255, 255, 0.85);
+	}
+
+	.hand {
+		display: inline-flex;
+		align-items: center;
+		font-size: 15px;
+	}
+	.hand .mult {
+		margin-left: 8px;
+		padding: 1px 7px;
+		border-radius: 6px;
+		background: var(--hc-red);
+		color: #fff;
+		font-size: 12px;
+		box-shadow: var(--shadow);
+	}
+	.themes {
+		display: block;
+		margin-top: 3px;
+		font-size: 12px;
+		color: #ccc;
 	}
 </style>

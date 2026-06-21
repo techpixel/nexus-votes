@@ -110,6 +110,7 @@
 						<span class="dz-text">Drag and drop a screenshot</span>
 					{/if}
 				</label>
+				{#if errors.screenshot}<span class="err">{errors.screenshot}</span>{/if}
 			</div>
 
 			<div class="field">
@@ -146,9 +147,25 @@
 					id="description"
 					name="description"
 					class="input textarea"
+					class:invalid={errors.description}
 					placeholder="Introducing the new Podium Pro Max Ultra!"
 					rows="3">{values.description ?? ''}</textarea
 				>
+				{#if errors.description}<span class="err">{errors.description}</span>{/if}
+			</div>
+
+			<div class="field">
+				<label for="hackatime">Hackatime Project Name</label>
+				<input
+					id="hackatime"
+					name="hackatime"
+					class="input"
+					class:invalid={errors.hackatime}
+					placeholder="my-cool-project"
+					value={values.hackatime ?? ''}
+					autocomplete="off"
+				/>
+				{#if errors.hackatime}<span class="err">{errors.hackatime}</span>{/if}
 			</div>
 
 			<div class="field">

@@ -177,6 +177,12 @@ export interface TeamProject {
 	screenshotUrl?: string;
 	/** raw card codes, e.g. ["AS", "QH", "5S"] */
 	cards: string[];
+	/** project details — used by the read-only /ship/done summary */
+	description?: string;
+	codeUrl?: string;
+	playableUrl?: string;
+	githubUsername?: string;
+	playedHand?: string;
 }
 
 // ---- in-memory team/project cache ----
@@ -247,8 +253,85 @@ async function fetchTeamProject(teamId: string): Promise<TeamProject | null> {
 		cards: String(f['Cards'] ?? '')
 			.split(/\s+/)
 			.map((s) => s.trim())
-			.filter(Boolean)
+			.filter(Boolean),
+		description: (f['Description'] as string) || undefined,
+		codeUrl: (f['Code URL'] as string) || undefined,
+		playableUrl: (f['Playable URL'] as string) || undefined,
+		githubUsername: (f['GitHub Username'] as string) || undefined,
+		playedHand: (f['Played Hand'] as string) || undefined
 	};
+}
+
+export interface ShipStats {
+	/** Number of project submissions on file. */
+	projects: number;
+	/** Unique people across all shipped teams (submitters + listed teammates). */
+	people: number;
+}
+
+// ---- ship-stats cache ----
+// The /dash scoreboard is a public, frequently-refreshed display (e.g. on a
+// projector at the event). The underlying counts move slowly, so a short
+// read-through cache (single-flight) collapses repeated loads into one
+// paginated sweep of the submissions table. Per-process only.
+const STATS_TTL_MS = 30 * 1000;
+let statsCache: { value: ShipStats; at: number } | null = null;
+let statsInflight: Promise<ShipStats> | null = null;
+
+/** Aggregate ship counts for the scoreboard. Cached for {@link STATS_TTL_MS}. */
+export async function getShipStats(): Promise<ShipStats> {
+	if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.value;
+	if (statsInflight) return statsInflight;
+
+	// Only a resolved value is cached; a thrown transient error clears the
+	// in-flight slot and is retried on the next call.
+	const p = fetchShipStats()
+		.then((value) => {
+			statsCache = { value, at: Date.now() };
+			return value;
+		})
+		.finally(() => {
+			statsInflight = null;
+		});
+	statsInflight = p;
+	return p;
+}
+
+async function fetchShipStats(): Promise<ShipStats> {
+	if (!isAirtableConfigured()) return { projects: 0, people: 0 };
+	const { token, baseId, tableId } = config();
+
+	const people = new Set<string>();
+	let projects = 0;
+	let offset: string | undefined;
+	for (let page = 0; page < 50; page++) {
+		const url =
+			`${API_BASE}/${baseId}/${tableId}?pageSize=100` +
+			`&fields%5B%5D=Email&fields%5B%5D=${encodeURIComponent('Team Members')}` +
+			(offset ? `&offset=${encodeURIComponent(offset)}` : '');
+		const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+		if (!res.ok) throw new Error(`Stats lookup failed (${res.status})`);
+		const data = (await res.json()) as {
+			records?: Array<{ fields: Record<string, unknown> }>;
+			offset?: string;
+		};
+		for (const r of data.records ?? []) {
+			projects++;
+			const submitter = String(r.fields['Email'] ?? '')
+				.trim()
+				.toLowerCase();
+			if (submitter) people.add(submitter);
+			for (const m of String(r.fields['Team Members'] ?? '')
+				.split(/[\n,]+/)
+				.map((s) => s.trim().toLowerCase())
+				.filter(Boolean)) {
+				people.add(m);
+			}
+		}
+		offset = data.offset;
+		if (!offset) break;
+	}
+	return { projects, people: people.size };
 }
 
 /** Create a Teams row linked to a project submission record. */
@@ -358,6 +441,110 @@ export async function updateSubmission(recordId: string, fields: SubmissionField
 	if (!res.ok) {
 		const text = await res.text();
 		throw new Error(`Airtable update failed (${res.status}): ${text}`);
+	}
+}
+
+export interface OwnSubmission {
+	recordId: string;
+	/** empty on a not-yet-enriched teammate stub */
+	firstName: string;
+	/** raw card codes string, empty until copied from the canonical record */
+	cards: string;
+	playedHand: string;
+}
+
+/**
+ * The submission record whose `Email` is exactly this person's — i.e. their OWN
+ * record, not a teammate's whose `Team Members` merely lists them. Used to enrich
+ * a teammate's stub once they sign in. Fails open (returns null) on error.
+ */
+export async function findOwnSubmission(email: string): Promise<OwnSubmission | null> {
+	if (!isAirtableConfigured()) return null;
+	const needle = email.trim().toLowerCase();
+	if (!needle) return null;
+	const { token, baseId, tableId } = config();
+	const formula = encodeURIComponent(`LOWER({Email})='${escapeFormula(needle)}'`);
+	const fields = ['First Name', 'Cards', 'Played Hand']
+		.map((f) => `fields%5B%5D=${encodeURIComponent(f)}`)
+		.join('&');
+	try {
+		const res = await fetch(
+			`${API_BASE}/${baseId}/${tableId}?maxRecords=1&filterByFormula=${formula}&${fields}`,
+			{ headers: { Authorization: `Bearer ${token}` } }
+		);
+		if (!res.ok) return null;
+		const data = (await res.json()) as {
+			records?: Array<{ id: string; fields: Record<string, unknown> }>;
+		};
+		const r = data.records?.[0];
+		if (!r) return null;
+		return {
+			recordId: r.id,
+			firstName: String(r.fields['First Name'] ?? '').trim(),
+			cards: String(r.fields['Cards'] ?? '').trim(),
+			playedHand: String(r.fields['Played Hand'] ?? '').trim()
+		};
+	} catch {
+		return null;
+	}
+}
+
+export interface EnrichOwnInput {
+	email: string;
+	firstName: string;
+	lastName: string;
+	birthday?: string;
+	address?: {
+		line1?: string;
+		line2?: string;
+		city?: string;
+		state?: string;
+		postalCode?: string;
+		country?: string;
+	};
+	/** canonical team values to backfill (raw card codes + played-hand name) */
+	cards?: string;
+	playedHand?: string;
+}
+
+/**
+ * Fill in a teammate's stub record once they've signed in: their Hack Club
+ * identity (name/address/birthday, only if the record is still missing it) plus
+ * the team's cards/played hand (only if not yet copied). Idempotent — patches
+ * just the gaps, so it no-ops for the submitter's already-complete record and
+ * for a teammate who's been enriched before. Best-effort: logs and returns.
+ */
+export async function enrichOwnSubmission(input: EnrichOwnInput): Promise<void> {
+	const own = await findOwnSubmission(input.email);
+	if (!own) return;
+
+	const patch: SubmissionFields = {};
+
+	// Identity — only when the stub hasn't been filled in yet.
+	if (!own.firstName) {
+		if (input.firstName) patch['First Name'] = input.firstName;
+		if (input.lastName) patch['Last Name'] = input.lastName;
+		if (input.birthday) patch['Birthday'] = input.birthday;
+		const a = input.address;
+		if (a) {
+			if (a.line1) patch['Address (Line 1)'] = a.line1;
+			if (a.line2) patch['Address (Line 2)'] = a.line2;
+			if (a.city) patch['City'] = a.city;
+			if (a.state) patch['State / Province'] = a.state;
+			if (a.postalCode) patch['ZIP / Postal Code'] = a.postalCode;
+			if (a.country) patch['Country'] = a.country;
+		}
+	}
+
+	// Cards / played hand — backfill from the canonical record if not copied yet.
+	if (!own.cards && input.cards) patch['Cards'] = input.cards;
+	if (!own.playedHand && input.playedHand) patch['Played Hand'] = input.playedHand;
+
+	if (Object.keys(patch).length === 0) return;
+	try {
+		await updateSubmission(own.recordId, patch);
+	} catch (e) {
+		console.error('enrichOwnSubmission failed:', e);
 	}
 }
 

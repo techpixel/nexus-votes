@@ -43,6 +43,7 @@ export const actions: Actions = {
 		const playableLink = String(form.get('playableLink') ?? '').trim();
 		const githubRepo = String(form.get('githubRepo') ?? '').trim();
 		const description = String(form.get('description') ?? '').trim();
+		const hackatime = String(form.get('hackatime') ?? '').trim();
 		const hoursRaw = String(form.get('hours') ?? '').trim();
 		const howHeard = String(form.get('howHeard') ?? '').trim();
 		const doingWell = String(form.get('doingWell') ?? '').trim();
@@ -54,6 +55,7 @@ export const actions: Actions = {
 			playableLink,
 			githubRepo,
 			description,
+			hackatime,
 			hours: hoursRaw,
 			howHeard,
 			doingWell,
@@ -61,13 +63,27 @@ export const actions: Actions = {
 		};
 		const errors: Record<string, string> = {};
 
+		// All visible fields are required.
 		if (!projectName) errors.projectName = 'Give your project a name.';
+
+		if (!(screenshot instanceof File) || screenshot.size === 0)
+			errors.screenshot = 'Add a screenshot of your project.';
+		else if (screenshot.size > MAX_SCREENSHOT_BYTES)
+			errors.screenshot = 'Screenshot must be under 5 MB.';
+
+		if (!playableLink) errors.playableLink = 'A playable link is required.';
+		else if (!isUrl(playableLink)) errors.playableLink = 'Enter a full URL (https://…).';
+
 		if (!githubRepo) errors.githubRepo = 'A GitHub repo link is required.';
 		else if (!isUrl(githubRepo)) errors.githubRepo = 'Enter a full URL (https://…).';
-		if (playableLink && !isUrl(playableLink)) errors.playableLink = 'Enter a full URL (https://…).';
+
+		if (!description) errors.description = 'Add a project description.';
+		if (!hackatime) errors.hackatime = 'Enter your Hackatime project name.';
 
 		let hours: number | null = null;
-		if (hoursRaw !== '') {
+		if (hoursRaw === '') {
+			errors.hours = 'Enter your estimated hours.';
+		} else {
 			hours = Number(hoursRaw);
 			if (Number.isNaN(hours) || hours < 0) errors.hours = 'Enter a number of hours.';
 		}
@@ -88,20 +104,28 @@ export const actions: Actions = {
 		// fallback (e.g. someone posting straight here without that step).
 		const teamId = draft?.teamId || (await nextTeamId());
 
-		const fields: Record<string, string | number> = {
+		// Project-level data shared by everyone on the team. Reused below to seed a
+		// stub submission record for each teammate (see createSubmission loop).
+		const sharedFields: Record<string, string | number> = {
 			'Project Name': projectName,
 			'Code URL': githubRepo,
-			'First Name': locals.user.firstName,
-			'Last Name': locals.user.lastName,
-			Email: locals.user.email,
+			'Playable URL': playableLink,
+			Description: description,
 			'Team Members': team.join('\n'),
 			'Team ID': teamId
 		};
-		if (description) fields['Description'] = description;
-		if (playableLink) fields['Playable URL'] = playableLink;
 		const ghUser = parseGithubUsername(githubRepo);
-		if (ghUser) fields['GitHub Username'] = ghUser;
-		if (hours !== null) fields['Optional - Override Hours Spent'] = hours;
+		if (ghUser) sharedFields['GitHub Username'] = ghUser;
+		if (hackatime) sharedFields['Hackatime Project Name'] = hackatime;
+		if (hours !== null) sharedFields['Optional - Override Hours Spent'] = hours;
+
+		// The submitter's own record: shared project data + their identity.
+		const fields: Record<string, string | number> = {
+			...sharedFields,
+			'First Name': locals.user.firstName,
+			'Last Name': locals.user.lastName,
+			Email: locals.user.email
+		};
 		if (howHeard) fields['How did you hear about this?'] = howHeard;
 		if (doingWell) fields['What are we doing well?'] = doingWell;
 		if (improve) fields['How can we improve?'] = improve;
@@ -154,6 +178,22 @@ export const actions: Actions = {
 			await createTeam({ teamId, members: team, projectRecordId: recordId });
 		} catch {
 			// the submission is saved regardless of team-table indexing
+		}
+
+		// Give every teammate their own YSWS submission record. These stubs carry the
+		// shared project data + the teammate's email, but no personal/shipping identity
+		// (that's only available once the teammate signs in themselves). Best-effort —
+		// the submitter's own ship is already saved either way. Only the submitter's
+		// record is linked from the Teams table (the canonical project record).
+		const teammateEmails = team.filter(
+			(e) => e.trim().toLowerCase() !== locals.user!.email.trim().toLowerCase()
+		);
+		for (const email of teammateEmails) {
+			try {
+				await createSubmission({ ...sharedFields, Email: email });
+			} catch (e) {
+				console.error('createSubmission (teammate stub) failed:', e);
+			}
 		}
 
 		// Hand off to step 2 (add your cards) with a signed reference to the record.

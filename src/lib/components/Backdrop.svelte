@@ -2,7 +2,8 @@
 	// Decorative background. The home variant is a single full-bleed image;
 	// the ship variant keeps the layered Figma composition (1366 x 768), with
 	// the .stage sized to COVER the viewport while preserving its ratio.
-	let { variant = 'home' }: { variant?: 'home' | 'ship' } = $props();
+	let { variant = 'home', gradient = true }: { variant?: 'home' | 'ship'; gradient?: boolean } =
+		$props();
 </script>
 
 <div class="backdrop {variant}" aria-hidden="true">
@@ -10,7 +11,9 @@
 		<img class="home-layer home-bg" src="/art/landing-bg.png" alt="" />
 		<img class="home-layer home-mg" src="/art/landing-mg.png" alt="" />
 		<img class="home-layer home-fg" src="/art/landing-fg.png" alt="Horizons Nexus" />
-		<div class="home-gradient"></div>
+		{#if gradient}
+			<div class="home-gradient"></div>
+		{/if}
 	{:else}
 		<div class="stage">
 			<img class="layer ship-texture" src="/art/art9.webp" alt="" />
@@ -69,7 +72,7 @@
 		object-position: center;
 	}
 	/* Rays spiral about their centre — very slow, barely-there drift, matching
-	   nexus_cards_html's hero spiral. scale(1.32) keeps the burst past the edges
+	   nexus_cards_html's hero spiral. scale(1.45) keeps the burst past the edges
 	   so the rotation never reveals a gap. */
 	.home-mg {
 		transform-origin: center;
@@ -78,16 +81,16 @@
 	}
 	@keyframes homeSpin {
 		from {
-			transform: rotate(0deg) scale(1.32);
+			transform: rotate(0deg) scale(1.45);
 		}
 		to {
-			transform: rotate(360deg) scale(1.32);
+			transform: rotate(360deg) scale(1.45);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.home-mg {
 			animation: none;
-			transform: scale(1.32);
+			transform: scale(1.45);
 		}
 	}
 	.home-fg {
