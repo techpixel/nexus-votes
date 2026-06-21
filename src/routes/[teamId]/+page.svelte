@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import WaveText from '$lib/components/WaveText.svelte';
 	import LiftText from '$lib/components/LiftText.svelte';
 	import ShaderBackdrop from '$lib/components/ShaderBackdrop.svelte';
@@ -49,7 +50,9 @@
 	{:else if !data.loggedIn}
 		<div class="signin">
 			<p class="signin-prompt">Sign in to vote on this project.</p>
-			<a class="signin-btn" href="/auth/login">Sign in with Hack Club</a>
+			<a class="signin-btn" href="/auth/login?next={encodeURIComponent(page.url.pathname)}"
+				>Sign in with Hack Club</a
+			>
 		</div>
 	{:else if data.ownTeam}
 		<p class="notice">This is your team's project — you can't vote for it.</p>

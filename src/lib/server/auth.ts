@@ -31,6 +31,22 @@ export function isAuthConfigured(): boolean {
 	return Boolean(clientId && clientSecret && redirectUri);
 }
 
+/** Default landing page after a successful sign-in when no `next` was given. */
+export const DEFAULT_POST_LOGIN = '/ship/team';
+
+/**
+ * Validate a post-login redirect target. Only same-origin, root-relative paths
+ * are allowed — anything that could escape to another origin (an absolute URL,
+ * a protocol-relative `//evil.com`, or a `/\evil.com` backslash trick browsers
+ * normalise to `//`) falls back to {@link DEFAULT_POST_LOGIN}. This is what
+ * keeps the `next` parameter from becoming an open redirect.
+ */
+export function safeNext(next: string | null | undefined): string {
+	if (!next || !next.startsWith('/')) return DEFAULT_POST_LOGIN;
+	if (next.startsWith('//') || next.startsWith('/\\')) return DEFAULT_POST_LOGIN;
+	return next;
+}
+
 export function buildAuthorizeUrl(state: string): string {
 	const { clientId, redirectUri } = authConfig();
 	const params = new URLSearchParams({

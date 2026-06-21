@@ -1,16 +1,22 @@
 import { redirect, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { exchangeCodeForToken, fetchIdentity, primaryAddress } from '$lib/server/auth';
+import { exchangeCodeForToken, fetchIdentity, primaryAddress, safeNext } from '$lib/server/auth';
 import { isEligibleAttendee } from '$lib/server/horizons';
 import { upsertUser } from '$lib/server/airtable';
 import { SESSION_COOKIE, COOKIE_OPTIONS, seal } from '$lib/server/session';
 
 const STATE_COOKIE = 'nexus_oauth_state';
+const NEXT_COOKIE = 'nexus_oauth_next';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
 	const returnedState = url.searchParams.get('state');
 	const oauthError = url.searchParams.get('error');
+
+	// Where to land after sign-in, captured by /auth/login. Re-validated here so a
+	// tampered cookie can't turn this into an open redirect.
+	const next = safeNext(cookies.get(NEXT_COOKIE));
+	cookies.delete(NEXT_COOKIE, { path: '/' });
 
 	if (oauthError) {
 		throw error(400, `Hack Club sign-in was cancelled or failed: ${oauthError}`);
@@ -84,5 +90,5 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	});
 	cookies.set(SESSION_COOKIE, sealed, COOKIE_OPTIONS);
 
-	throw redirect(302, '/ship/team');
+	throw redirect(302, next);
 };
