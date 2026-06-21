@@ -3,12 +3,12 @@
 	import Backdrop from '$lib/components/Backdrop.svelte';
 	import type { PageData, ActionData } from './$types';
 
-	type Member = { email: string; name: string };
+	type Member = { email: string; name: string; slackId?: string; slackUsername?: string };
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	// svelte-ignore state_referenced_locally -- intentional one-time prefill from server
-	let teammates = $state<Member[]>((data.teammates ?? []).map((e) => ({ email: e, name: e })));
+	let teammates = $state<Member[]>(data.teammates ?? []);
 	// svelte-ignore state_referenced_locally -- intentional one-time prefill from server
 	let teamNumber = $state(data.teamId ?? '');
 	let query = $state('');
@@ -66,6 +66,26 @@
 	function removeMember(email: string) {
 		teammates = teammates.filter((t) => t.email !== email);
 	}
+
+	// Slack avatars come from Cachet — /users/{slackId}/r 302-redirects straight
+	// to the profile image, so the browser can load it directly via <img src>.
+	const CACHET_BASE = 'https://cachet.dunkirk.sh';
+	function avatarUrl(slackId: string) {
+		return `${CACHET_BASE}/users/${slackId}/r`;
+	}
+	function initial(label: string) {
+		return (label.trim()[0] ?? '?').toUpperCase();
+	}
+	// If Cachet has no image for this Slack ID, drop the <img> to reveal the initial.
+	function onAvatarError(e: Event) {
+		(e.currentTarget as HTMLImageElement).remove();
+	}
+
+	const selfName = $derived(
+		[data.user?.firstName, data.user?.lastName].filter(Boolean).join(' ').trim() ||
+			data.user?.email ||
+			'You'
+	);
 </script>
 
 <svelte:head>
@@ -75,7 +95,7 @@
 <Backdrop variant="ship" />
 
 <header class="topbar">
-	<span class="who">Signed in as {data.user.email}</span>
+	<span class="who">Signed in as {selfName}</span>
 	<a class="logout" href="/auth/logout">Log out</a>
 </header>
 
@@ -110,13 +130,19 @@
 			<span class="label">Team Members</span>
 			<ul class="members">
 				<li class="member">
-					<span class="m-name">{data.user.email}</span>
-					<span class="m-email">you</span>
+					{@render avatar(data.user?.slackId, selfName)}
+					<span class="m-text">
+						<span class="m-name">{selfName}</span>
+						<span class="m-email">you</span>
+					</span>
 				</li>
 				{#each teammates as m (m.email)}
 					<li class="member">
-						<span class="m-name">{m.name}</span>
-						{#if m.name !== m.email}<span class="m-email">{m.email}</span>{/if}
+						{@render avatar(m.slackId, m.name)}
+						<span class="m-text">
+							<span class="m-name">{m.name}</span>
+							{#if m.slackUsername}<span class="m-email">@{m.slackUsername}</span>{/if}
+						</span>
 						<button
 							type="button"
 							class="remove"
@@ -151,8 +177,11 @@
 									disabled={isOnTeam(r.email)}
 									onclick={() => pick(r)}
 								>
-									<span class="dd-name">{r.name}</span>
-									<span class="dd-email">{r.email}</span>
+									{@render avatar(r.slackId, r.name)}
+									<span class="dd-text">
+										<span class="dd-name">{r.name}</span>
+										{#if r.slackUsername}<span class="dd-email">@{r.slackUsername}</span>{/if}
+									</span>
 								</button>
 							</li>
 						{/each}
@@ -172,6 +201,22 @@
 		</div>
 	</form>
 </main>
+
+{#snippet avatar(slackId: string | undefined, label: string)}
+	<span class="avatar" aria-hidden="true">
+		<span class="avatar-initial">{initial(label)}</span>
+		{#if slackId}
+			<img
+				class="avatar-img"
+				src={avatarUrl(slackId)}
+				alt=""
+				loading="lazy"
+				referrerpolicy="no-referrer"
+				onerror={onAvatarError}
+			/>
+		{/if}
+	</span>
+{/snippet}
 
 <style>
 	.topbar {
@@ -250,14 +295,50 @@
 	.member {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 10px;
 		padding: 8px 0;
 		font-size: 14px;
 		color: #fff;
 	}
+	.m-text {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	.m-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.m-email {
 		color: var(--muted);
 		font-size: 12px;
+	}
+
+	/* ---- Slack avatar (Cachet) ---- */
+	.avatar {
+		position: relative;
+		flex: none;
+		width: 30px;
+		height: 30px;
+		border-radius: 50%;
+		overflow: hidden;
+		background: var(--hc-red);
+		display: grid;
+		place-items: center;
+	}
+	.avatar-initial {
+		font-size: 13px;
+		font-weight: 600;
+		color: #fff;
+	}
+	.avatar-img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 	.remove {
 		margin-left: auto;
@@ -320,8 +401,9 @@
 	}
 	.dd-item {
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
+		flex-direction: row;
+		align-items: center;
+		gap: 10px;
 		width: 100%;
 		text-align: left;
 		background: none;
@@ -330,6 +412,12 @@
 		padding: 8px 10px;
 		cursor: pointer;
 		color: #fff;
+	}
+	.dd-text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
 	}
 	.dd-item:hover:not(:disabled),
 	.dd-item:focus-visible {
